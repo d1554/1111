@@ -1,1 +1,1 @@
-https://sub.sslinks.co.in/api/v1/client/subscribe?token=faf2095420a9f50c1fe414cfb61689fd
+https://sub.sslinks.co.in/api/v1/client/subscribe?token=faf2095420a9f50c1fe414cfb61689
