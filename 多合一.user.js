@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         安卓全能键 (V17.1 对称强迫症版)
+// @name         安卓全能键 (V17.2 自定义键值版)
 // @namespace    http://tampermonkey.net/
-// @version      17.1
-// @description  左右键逻辑完全一致：均采用拦截后模拟的方式，修复焦点劫持，满足代码强迫症。
+// @version      17.2
+// @description  将遥控器的快退(227)/快进(228) 映射为 标准方向键，修复焦点劫持，代码逻辑对称。
 // @author       Gemini
 // @match        *://*/*
 // @grant        none
@@ -69,7 +69,7 @@
     }
 
     // ==========================================
-    // 3. 模拟按键 (强制发送给 activeElement)
+    // 3. 模拟按键 (输出标准方向键信号)
     // ==========================================
     function simulateKey(keyName, codeName, keyCodeVal) {
         const eventProps = {
@@ -89,12 +89,13 @@
         const code = e.keyCode || e.which;
 
         // -------------------------------------------------
-        // 【方向键逻辑 - 完美对称版】
+        // 【方向映射逻辑 - 完美对称版】
+        // 输入: 227/228 (遥控器) -> 输出: 37/39 (浏览器标准)
         // -------------------------------------------------
         
-        // 1. 左键 (37)
-        if (code === 37) {
-            if (!e.isTrusted) return; // 忽略脚本模拟信号
+        // 1. 左键 (输入 227 -> 输出 37)
+        if (code === 227) {
+            if (!e.isTrusted) return; 
             
             e.preventDefault(); 
             e.stopPropagation();
@@ -104,9 +105,9 @@
             return; 
         }
 
-        // 2. 右键 (39)
-        if (code === 39) {
-            if (!e.isTrusted) return; // 忽略脚本模拟信号
+        // 2. 右键 (输入 228 -> 输出 39)
+        if (code === 228) {
+            if (!e.isTrusted) return; 
 
             e.preventDefault(); 
             e.stopPropagation();
