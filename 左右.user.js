@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         安卓方向键修复 (21->PC左 / 22->PC右)
+// @name         安卓方向键独立映射 (21->左 / 22->右) - 强力版
 // @namespace    http://tampermonkey.net/
-// @version      1.0
-// @description  将安卓原生方向键值 21/22 转换为 PC 标准方向键值 37/39，解决网页不识别安卓遥控器方向键的问题
+// @version      2.0
+// @description  基于 v7.1 架构，专门修复安卓 21/22 键值无法控制网页的问题
 // @author       Gemini
 // @match        *://*/*
 // @grant        none
@@ -12,20 +12,9 @@
 (function() {
     'use strict';
 
-    // 提示框 (方便调试，确认按键已生效)
-    function showToast(text) {
-        let existing = document.getElementById('dpad-toast');
-        if (existing) existing.remove();
+    // --- 核心工具函数 (与之前的代码保持完全一致) ---
 
-        let div = document.createElement('div');
-        div.id = 'dpad-toast';
-        div.style = "position:fixed; top:85%; left:50%; transform:translate(-50%, -50%); background:rgba(0,100,255,0.8); color:#fff; padding:6px 12px; border-radius:4px; z-index:2147483647; font-size:14px; pointer-events:none; transition: opacity 0.2s;";
-        div.innerText = text;
-        document.body.appendChild(div);
-        setTimeout(() => div.remove(), 800);
-    }
-
-    // 模拟按键函数
+    // 通用的按键模拟函数
     function simulateKey(keyName, codeName, keyCodeVal) {
         const eventProps = {
             key: keyName,
@@ -37,39 +26,65 @@
             view: window
         };
 
+        // 尝试获取焦点元素，如果没有则默认 body
         const target = document.activeElement || document.body;
 
+        // 模拟完整的按键生命周期
         target.dispatchEvent(new KeyboardEvent('keydown', eventProps));
         target.dispatchEvent(new KeyboardEvent('keypress', eventProps));
         target.dispatchEvent(new KeyboardEvent('keyup', eventProps));
-        
-        console.log(`已将安卓键转换为: ${keyName} (${keyCodeVal})`);
+
+        console.log(`[映射生效] 原键被拦截，模拟按键: ${keyName} (${keyCodeVal})`);
     }
 
+    // 提示框
+    function showToast(text) {
+        let existing = document.getElementById('dpad-key-toast');
+        if (existing) existing.remove();
+
+        let div = document.createElement('div');
+        div.id = 'dpad-key-toast';
+        div.style = "position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); background:rgba(0,0,0,0.6); color:#fff; padding:10px 20px; border-radius:8px; z-index:999999; font-size:18px; pointer-events:none; transition: opacity 0.2s;";
+        div.innerText = text;
+        document.body.appendChild(div);
+        setTimeout(() => div.remove(), 600);
+    }
+
+    // --- 监听逻辑 ---
+
     document.addEventListener('keydown', function(e) {
-        // 防止脚本模拟的按键再次触发自己 (尽管方向键通常不会死循环，但为了安全加上)
+        // 【关键保护】忽略脚本自己模拟出来的按键，防止死循环
         if (!e.isTrusted) return;
 
+        // 调试日志：如果您按了键没反应，打开F12看控制台这里输出了什么
+        // console.log("捕获到按键:", e.keyCode, e.key);
+
         // =================================================
-        // 1. 安卓左键 (21) -> 映射为 PC ArrowLeft (37)
+        // 1. 监听 21 (安卓左键) -> 映射为 PC ArrowLeft (37)
         // =================================================
-        if (e.keyCode === 21) {
-            e.preventDefault();
-            e.stopPropagation(); // 阻止原生 21 事件传播
+        if (e.keyCode === 21 || e.key === 'DPadLeft') {
+            e.preventDefault();     // 阻止安卓原生行为
+            e.stopPropagation();    // 阻止事件继续向上传播
+            e.stopImmediatePropagation(); // 立即阻止当前节点其他监听器
+
             simulateKey('ArrowLeft', 'ArrowLeft', 37);
-            showToast('⬅️ PC左键');
+            showToast('⬅️');
+            return;
         }
 
         // =================================================
-        // 2. 安卓右键 (22) -> 映射为 PC ArrowRight (39)
+        // 2. 监听 22 (安卓右键) -> 映射为 PC ArrowRight (39)
         // =================================================
-        if (e.keyCode === 22) {
+        if (e.keyCode === 22 || e.key === 'DPadRight') {
             e.preventDefault();
-            e.stopPropagation(); // 阻止原生 22 事件传播
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+
             simulateKey('ArrowRight', 'ArrowRight', 39);
-            showToast('➡️ PC右键');
+            showToast('➡️');
+            return;
         }
 
-    }, true); // 使用捕获模式 (true) 确保最先执行
+    }, true); // useCapture = true，确保在网页其他脚本之前捕获
 
 })();
