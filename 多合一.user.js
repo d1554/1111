@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         安卓全能键 (V17.2 自定义键值版)
+// @name         安卓全能键 (V17.4 严谨防误触版)
 // @namespace    http://tampermonkey.net/
-// @version      17.2
-// @description  将遥控器的快退(227)/快进(228) 映射为 标准方向键，修复焦点劫持，代码逻辑对称。
+// @version      17.4
+// @description  全键位统一处理，修复了X键误触问题。所有逻辑完全对称且安全。
 // @author       Gemini
 // @match        *://*/*
 // @grant        none
@@ -69,7 +69,7 @@
     }
 
     // ==========================================
-    // 3. 模拟按键 (输出标准方向键信号)
+    // 3. 模拟按键
     // ==========================================
     function simulateKey(keyName, codeName, keyCodeVal) {
         const eventProps = {
@@ -89,16 +89,14 @@
         const code = e.keyCode || e.which;
 
         // -------------------------------------------------
-        // 【方向映射逻辑 - 完美对称版】
-        // 输入: 227/228 (遥控器) -> 输出: 37/39 (浏览器标准)
+        // 【方向映射逻辑】
+        // 输入: 227/228 (遥控器) -> 输出: 37/39 (标准方向)
         // -------------------------------------------------
         
         // 1. 左键 (输入 227 -> 输出 37)
         if (code === 227) {
             if (!e.isTrusted) return; 
-            
-            e.preventDefault(); 
-            e.stopPropagation();
+            e.preventDefault(); e.stopPropagation();
             
             showToast('← 后退');
             simulateKey('ArrowLeft', 'ArrowLeft', 37);
@@ -108,9 +106,7 @@
         // 2. 右键 (输入 228 -> 输出 39)
         if (code === 228) {
             if (!e.isTrusted) return; 
-
-            e.preventDefault(); 
-            e.stopPropagation();
+            e.preventDefault(); e.stopPropagation();
             
             showToast('→ 前进');
             simulateKey('ArrowRight', 'ArrowRight', 39);
@@ -118,41 +114,54 @@
         }
 
         // -------------------------------------------------
-        // 【媒体键逻辑】 (保持不变)
+        // 【媒体映射逻辑】
+        // 输入: 87/88/85 (遥控器) -> 输出: S/W/空格 (标准键)
         // -------------------------------------------------
-        if (!e.isTrusted) return; 
 
-        // 87 -> S
-        if ((code === 87 || e.key === 'MediaTrackNext') && e.key !== 'w' && e.key !== 'W') {
+        // 3. 下一曲 (输入 87 -> 输出 S)
+        if (code === 87 || e.key === 'MediaTrackNext') {
+            // 排除真实的键盘 W 按键 (W键码是87)
+            if (e.key === 'w' || e.key === 'W') return;
+            if (!e.isTrusted) return; 
+
             e.preventDefault(); e.stopPropagation();
-            simulateKey('s', 'KeyS', 83);
+            
             showToast('S (下一曲)');
+            simulateKey('s', 'KeyS', 83);
             return;
         }
 
-        // 88 -> W
+        // 4. 上一曲 (输入 88 -> 输出 W)
         if (code === 88 || e.key === 'MediaTrackPrevious') {
+            // 排除真实的键盘 X 按键 (X键码是88)
+            if (e.key === 'x' || e.key === 'X') return;
+            if (!e.isTrusted) return; 
+
             e.preventDefault(); e.stopPropagation();
-            simulateKey('w', 'KeyW', 87);
+            
             showToast('W (上一曲)');
+            simulateKey('w', 'KeyW', 87);
             return;
         }
 
-        // 85 -> 空格 / H
+        // 5. 暂停/播放 (输入 85 -> 输出 空格/H)
         if (code === 85 || e.key === 'MediaPlayPause') {
+            if (!e.isTrusted) return; 
             e.preventDefault(); e.stopPropagation();
+
             pressCount++;
             if (actionTimer) clearTimeout(actionTimer);
             actionTimer = setTimeout(() => {
                 if (pressCount === 1) {
-                    simulateKey(' ', 'Space', 32);
                     showToast('⏯ 暂停/播放');
+                    simulateKey(' ', 'Space', 32);
                 } else if (pressCount >= 2) {
-                    simulateKey('h', 'KeyH', 72);
                     showToast('H (双击)');
+                    simulateKey('h', 'KeyH', 72);
                 }
                 pressCount = 0;
             }, DELAY);
+            return;
         }
 
     }, true);
