@@ -1,74 +1,32 @@
 // ==UserScript==
-// @name         安卓方向键映射 (21->左 / 22->右)
+// @name         安卓按键代码测试
 // @namespace    http://tampermonkey.net/
 // @version      1.0
-// @description  将安卓遥控器/手柄的左键(21)映射为PC左方向键(37)，右键(22)映射为PC右方向键(39)
+// @description  检测安卓设备按键代码
 // @author       Gemini
 // @match        *://*/*
 // @grant        none
-// @run-at       document-start
 // ==/UserScript==
 
 (function() {
     'use strict';
 
-    // 通用的按键模拟函数
-    function simulateKey(keyName, codeName, keyCodeVal) {
-        const eventProps = {
-            key: keyName,
-            code: codeName,
-            keyCode: keyCodeVal,
-            which: keyCodeVal,
-            bubbles: true,
-            cancelable: true,
-            view: window
-        };
-
-        const target = document.activeElement || document.body;
-
-        // 模拟键盘事件
-        target.dispatchEvent(new KeyboardEvent('keydown', eventProps));
-        target.dispatchEvent(new KeyboardEvent('keypress', eventProps));
-        target.dispatchEvent(new KeyboardEvent('keyup', eventProps));
-
-        console.log(`[方向键映射] 已模拟: ${keyName} (${keyCodeVal})`);
-    }
-
-    // 简易提示框
-    function showToast(text) {
-        let existing = document.getElementById('dir-key-toast');
-        if (existing) existing.remove();
-
-        let div = document.createElement('div');
-        div.id = 'dir-key-toast';
-        div.style = "position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); background:rgba(0,0,0,0.7); color:#fff; padding:10px 20px; border-radius:8px; z-index:2147483647; font-size:24px; font-weight:bold; pointer-events:none; transition: opacity 0.2s;";
-        div.innerText = text;
-        document.body.appendChild(div);
-        setTimeout(() => div.remove(), 600);
-    }
+    // 创建一个悬浮窗显示按键信息
+    const infoBox = document.createElement('div');
+    infoBox.style.position = 'fixed';
+    infoBox.style.top = '10px';
+    infoBox.style.right = '10px';
+    infoBox.style.background = 'rgba(0,0,0,0.7)';
+    infoBox.style.color = '#fff';
+    infoBox.style.padding = '10px';
+    infoBox.style.zIndex = '99999';
+    infoBox.style.fontSize = '14px';
+    infoBox.innerText = '请按下一首键...';
+    document.body.appendChild(infoBox);
 
     document.addEventListener('keydown', function(e) {
-        // 防止脚本模拟的按键再次触发自己 (死循环保护)
-        if (!e.isTrusted) return;
-
-        // === 监听 21 (安卓向左) -> 映射为 ArrowLeft (37) ===
-        if (e.keyCode === 21) {
-            e.preventDefault();
-            e.stopPropagation();
-            simulateKey('ArrowLeft', 'ArrowLeft', 37);
-            showToast('←');
-            return;
-        }
-
-        // === 监听 22 (安卓向右) -> 映射为 ArrowRight (39) ===
-        if (e.keyCode === 22) {
-            e.preventDefault();
-            e.stopPropagation();
-            simulateKey('ArrowRight', 'ArrowRight', 39);
-            showToast('→');
-            return;
-        }
-
-    }, true); // 捕获模式，确保最先执行
-
+        // 显示按下的键的信息
+        infoBox.innerText = `Key: ${e.key} | Code: ${e.code} | KeyCode: ${e.keyCode}`;
+        console.log(`按键检测: Key: ${e.key}, Code: ${e.code}, KeyCode: ${e.keyCode}`);
+    }, true);
 })();
