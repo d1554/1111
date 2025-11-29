@@ -1,82 +1,56 @@
 // ==UserScript==
-// @name         安卓画中画 (PiP) 按键劫持测试
+// @name         视频自动解除静音 (针对播放/暂停操作)
 // @namespace    http://tampermonkey.net/
-// @version      9.0
-// @description  尝试进入画中画模式，利用悬浮窗的高优先级捕获按键
-// @author       Gemini Helper
-// @match        *://*/*
+// @version      1.0
+// @description  无论通过点击还是按键触发播放，都会自动取消静音并恢复音量
+// @author       Gemini
+// @match        https://www.douyin.com/*
+// @match        https://live.douyin.com/*
+// @match        https://www.bilibili.com/*
 // @grant        none
 // ==/UserScript==
 
 (function() {
     'use strict';
 
-    // 🔴 你的按钮选择器
-    const NEXT_SELECTOR = '.你的下一首按钮'; 
-    const PREV_SELECTOR = '.你的上一首按钮';
+    console.log("自动解除静音脚本已启动");
 
-    // UI
-    const btn = document.createElement('button');
-    btn.innerText = "📺 点击启动画中画劫持";
-    btn.style.cssText = "position:fixed; top:10px; right:10px; z-index:999999; background:red; color:white; padding:10px; border:none; border-radius:5px;";
-    document.body.appendChild(btn);
-
-    const logBox = document.createElement('div');
-    logBox.style.cssText = "position:fixed; top:60px; right:10px; z-index:999999; background:rgba(0,0,0,0.8); color:#0f0; font-size:12px; max-width:200px;";
-    document.body.appendChild(logBox);
-
-    function log(msg) {
-        logBox.innerHTML = msg + "<br>" + logBox.innerHTML;
-    }
-
-    // 创建视频
-    const video = document.createElement('video');
-    video.src = 'https://www.w3schools.com/html/mov_bbb.mp4'; // 使用真实视频以确保触发
-    video.loop = true;
-    video.muted = false; // 必须有声音
-    video.style.opacity = 0; 
-    video.style.position = 'fixed';
-    document.body.appendChild(video);
-
-    // 核心逻辑
-    btn.onclick = async () => {
-        try {
-            await video.play();
-            log("1. 视频已播放");
-
-            if (video.requestPictureInPicture) {
-                await video.requestPictureInPicture();
-                log("✅ 已进入画中画模式！");
-                log("👉 请现在按方向盘/耳机键测试");
-            } else {
-                log("❌ 此浏览器不支持画中画 API");
-            }
-        } catch (e) {
-            log("❌ 启动失败: " + e.message);
+    /**
+     * 核心逻辑：尝试解除静音
+     * @param {HTMLMediaElement} videoElement
+     */
+    function unmuteVideo(videoElement) {
+        if (videoElement.muted) {
+            videoElement.muted = false;
+            console.log("已检测到静音，强制解除静音");
         }
-    };
-
-    // 监听 MediaSession (在 PiP 模式下可能会生效)
-    if ('mediaSession' in navigator) {
-        const handler = (details) => {
-            log(`捕获动作: ${details.action}`);
-            if (details.action === 'nexttrack') document.querySelector(NEXT_SELECTOR)?.click();
-            if (details.action === 'previoustrack') document.querySelector(PREV_SELECTOR)?.click();
-        };
-        navigator.mediaSession.setActionHandler('nexttrack', handler);
-        navigator.mediaSession.setActionHandler('previoustrack', handler);
+        // 如果音量太小（比如0），强制设为 50%
+        if (videoElement.volume === 0) {
+            videoElement.volume = 0.5;
+            console.log("音量为0，强制恢复为 50%");
+        }
     }
 
-    // 监听键盘事件 (同时监听 keydown 和 keyup)
-    // 有时候 keydown 被吞了，但 keyup 会漏网
-    ['keydown', 'keyup'].forEach(eventType => {
-        document.addEventListener(eventType, (e) => {
-            // 过滤掉常规按键，只看媒体键
-            if (e.keyCode === 176 || e.key === 'MediaTrackNext' || e.code === 'MediaTrackNext') {
-                log(`⚡ ${eventType} 捕获下一首`);
-                if (eventType === 'keyup') document.querySelector(NEXT_SELECTOR)?.click();
-            }
-        });
-    });
+    // 1. 监听所有媒体元素的 'play' 事件 (捕获阶段，确保能抓到)
+    // 这里的 true 表示在捕获阶段触发，这对于动态加载的网页（如抖音）非常有效
+    document.addEventListener('play', (e) => {
+        if (e.target instanceof HTMLMediaElement) {
+            unmuteVideo(e.target);
+        }
+    }, true);
+
+    // 2. 额外监听空格键 (Space) - 防止有些网页按空格播放时不触发标准的 play 事件
+    document.addEventListener('keydown', (e) => {
+        if (e.code === 'Space') {
+            // 查找当前页面上所有的 video 标签
+            const videos = document.querySelectorAll('video');
+            videos.forEach(video => {
+                // 只有当前显示的、或者正在播放的才处理
+                if (!video.paused || video.getBoundingClientRect().height > 0) {
+                    unmuteVideo(video);
+                }
+            });
+        }
+    }, true);
 
 })();
