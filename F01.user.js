@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         S键映射 (安卓普通模式修复 V43)
+// @name         S键映射 (安卓族谱遍历通杀版 V44)
 // @namespace    http://tampermonkey.net/
-// @version      43.0
-// @description  双击S，三击H；强制清除选中状态+注入TabIndex强制聚焦；修复普通模式焦点丢失
+// @version      44.0
+// @description  双击S，三击H；采用全DOM层级遍历触发，解决安卓普通模式找不到监听目标的问题
 // @author       Gemini Helper
 // @match        *://*/*
 // @grant        none
@@ -12,7 +12,7 @@
 (function() {
     'use strict';
 
-    // --- 1. UI 系统 (保持简洁) ---
+    // --- 1. UI (保留) ---
     let counterBox = null;
     function initUI() {
         if (!document.body) return requestAnimationFrame(initUI);
@@ -39,54 +39,54 @@
         }, 500);
     }
 
-    // --- 2. 键盘发射器 (V43: 焦点锁定版) ---
+    // --- 2. 键盘发射器 (V44: 族谱遍历 + 模拟 Windows 键码) ---
     function triggerKey(keyName, originalTarget) {
         
-        // 稍微延长一点点延迟到 300ms，确保安卓的"三击放大"或"选中"动画结束
+        // 延迟 300ms 避开安卓触摸冲突
         setTimeout(() => {
             const isH = keyName.toLowerCase() === 'h';
             if (isH) showCounter("H", "#3388ff");
 
-            // --- 【关键步骤 1】清除干扰 ---
-            // 移除因三连击可能产生的文本选中状态，这会抢走键盘焦点
-            if (window.getSelection) {
-                window.getSelection().removeAllRanges();
-            }
-
-            // --- 【关键步骤 2】强制聚焦视频 ---
-            // 如果是在普通模式，焦点可能跑偏了。我们必须手动把焦点拉回视频元素。
-            let focusTarget = originalTarget;
-            if (focusTarget) {
-                // 如果视频元素本身不可聚焦（默认情况），强制赋予它聚焦能力
-                if (!focusTarget.getAttribute('tabindex')) {
-                    focusTarget.setAttribute('tabindex', '-1');
-                }
-                try {
-                    focusTarget.focus({preventScroll: true});
-                    // console.log("强制聚焦到:", focusTarget); 
-                } catch(e) {}
-            }
-
-            // --- 【关键步骤 3】确定发送目标 ---
-            // 优先发给当前（被我们强制）聚焦的元素，其次是 body
-            // 这样能模拟出"用户盯着视频按键盘"的效果
-            let targets = [document.activeElement, focusTarget, document.body, window];
-            targets = [...new Set(targets)]; // 去重
-
-            // 键码定义 (保留 V41 验证成功的 Firefox 修正)
+            // --- 键码定义 (模拟标准 Windows 键盘事件) ---
             let keyChar = keyName.toLowerCase();
             let code = 'Key' + keyName.toUpperCase();
-            let keyCode = keyName.toUpperCase().charCodeAt(0); 
-            let charCode = keyName.toLowerCase().charCodeAt(0); 
+            let keyCode = keyName.toUpperCase().charCodeAt(0); // H=72
+            let charCode = keyName.toLowerCase().charCodeAt(0); // h=104
 
+            // --- 【核心逻辑】构建“全家桶”目标列表 ---
+            // 既然不知道谁在监听，就给从 Video 到 Root 的所有元素都发一遍
+            let targets = [];
+            
+            // 1. 视频元素本身
+            if (originalTarget) targets.push(originalTarget);
+            
+            // 2. 向上遍历所有父级 (div, section, app-container...)
+            let current = originalTarget ? originalTarget.parentElement : null;
+            while (current) {
+                targets.push(current);
+                current = current.parentElement;
+            }
+            
+            // 3. 保底目标
+            targets.push(document.body);
+            targets.push(document.documentElement); // html 标签
+            targets.push(document);
+            targets.push(window);
+
+            // 去重
+            targets = [...new Set(targets)];
+
+            // --- 疯狂发送 ---
             targets.forEach(t => {
                 if(!t) return;
 
-                // 1. keydown
+                // 1. keydown (模拟 Windows 物理按下)
                 try {
                     let evtDown = new KeyboardEvent('keydown', {
                         key: keyChar, code: code, keyCode: keyCode, which: keyCode,
-                        bubbles: true, cancelable: true, view: window
+                        bubbles: false, // 我们自己手动遍历了，不需要 bubbles，防止重复触发
+                        cancelable: true, view: window,
+                        composed: true // 穿透 Shadow DOM
                     });
                     Object.defineProperty(evtDown, 'keyCode', { get: () => keyCode });
                     Object.defineProperty(evtDown, 'which', { get: () => keyCode });
@@ -94,33 +94,37 @@
                     t.dispatchEvent(evtDown);
                 } catch(e) {}
 
-                // 2. keypress (Firefox 核心)
+                // 2. keypress (Firefox 字符输入，模拟 Windows 输入文字)
                 try {
                     let evtPress = new KeyboardEvent('keypress', {
                         key: keyChar, code: code, keyCode: 0, which: charCode,
-                        bubbles: true, cancelable: true, view: window
+                        bubbles: false,
+                        cancelable: true, view: window,
+                        composed: true
                     });
                     Object.defineProperty(evtPress, 'keyCode', { get: () => 0 });
-                    Object.defineProperty(evtPress, 'charCode', { get: () => charCode });
+                    Object.defineProperty(evtPress, 'charCode', { get: () => charCode }); // 关键: 104
                     Object.defineProperty(evtPress, 'which', { get: () => charCode });
                     t.dispatchEvent(evtPress);
                 } catch(e) {}
 
-                // 3. keyup
+                // 3. keyup (模拟 Windows 抬起)
                 try {
                     let evtUp = new KeyboardEvent('keyup', {
                         key: keyChar, code: code, keyCode: keyCode, which: keyCode,
-                        bubbles: true, cancelable: true, view: window
+                        bubbles: false,
+                        cancelable: true, view: window,
+                        composed: true
                     });
                     Object.defineProperty(evtUp, 'keyCode', { get: () => keyCode });
                     t.dispatchEvent(evtUp);
                 } catch(e) {}
             });
 
-        }, 300); // 延迟调整为 300ms
+        }, 300);
     }
 
-    // --- 3. 核心逻辑 (保持不变) ---
+    // --- 3. 核心逻辑 (保持 V43 逻辑) ---
     let clickCount = 0;
     let actionTimer = null;
     let lastEventTime = 0;   
