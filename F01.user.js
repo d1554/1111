@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         S键映射 (Firefox终极模拟版)
+// @name         S键映射 (Firefox时机修复版)
 // @namespace    http://tampermonkey.net/
-// @version      36.0
-// @description  1秒宽容度；修复Firefox H键无效问题(补全keypress事件)；保留防误触/防拖拽
+// @version      37.0
+// @description  1秒宽容度；修复Firefox三连击H因事件冲突被吞掉的问题(异步触发)
 // @author       Gemini Helper
 // @match        *://*/*
 // @grant        none
@@ -47,60 +47,52 @@
         }, 500);
     }
 
-    // --- 2. 键盘发射器 (V36 终极版) ---
+    // --- 2. 键盘发射器 (异步增强版) ---
     function triggerKey(keyName) {
-        let keyChar = keyName.toLowerCase();
-        let keyCode = keyName.toUpperCase().charCodeAt(0);
+        // 将发射逻辑包裹在 setTimeout 中，强制推迟到下一个事件循环
+        // 这是解决 Firefox "吞事件" 的关键
+        setTimeout(() => {
+            let keyChar = keyName.toLowerCase();
+            let keyCode = keyName.toUpperCase().charCodeAt(0);
 
-        // UI 提示
-        if (keyName === 'h') showCounter("H", "#3388ff");
-        
-        // 目标列表：增加 window，因为有些网站事件监听在 window 上
-        const targets = [document.activeElement, document.body, document.documentElement, window];
+            if (keyName === 'h') showCounter("H", "#3388ff");
+            
+            // 扩大打击面，确保 activeElement 能收到
+            const targets = [document.activeElement || document.body, document.body, document.documentElement, window];
+            
+            // 去重，防止对同一个元素发两次
+            const uniqueTargets = [...new Set(targets)]; 
 
-        targets.forEach(t => {
-            if (!t) return;
+            uniqueTargets.forEach(t => {
+                if (!t) return;
 
-            // 模拟完整的按键生命周期：按下 -> 按住(输入字符) -> 抬起
-            // 很多网站 H 键需要 keypress 才能生效
-            ['keydown', 'keypress', 'keyup'].forEach(type => {
-                try {
-                    let eventInit = {
-                        key: keyChar,
-                        code: 'Key' + keyChar.toUpperCase(),
-                        keyCode: keyCode, // 默认值
-                        which: keyCode,
-                        bubbles: true, 
-                        cancelable: true, 
-                        view: window
-                    };
+                ['keydown', 'keypress', 'keyup'].forEach(type => {
+                    try {
+                        let eventInit = {
+                            key: keyChar,
+                            code: 'Key' + keyChar.toUpperCase(),
+                            keyCode: keyCode,
+                            which: keyCode,
+                            bubbles: true, 
+                            cancelable: true,
+                            composed: true, // 现代浏览器事件穿透 Shadow DOM
+                            view: window
+                        };
 
-                    let evt = new KeyboardEvent(type, eventInit);
+                        let evt = new KeyboardEvent(type, eventInit);
+                        const isPress = (type === 'keypress');
 
-                    // 【核心修复】针对 Firefox 严格区分 keyCode 和 charCode
-                    // keydown/keyup: keyCode 有值, charCode 为 0
-                    // keypress: keyCode 通常为 0, charCode 有值 (ASCII码)
-                    
-                    const isPress = (type === 'keypress');
+                        Object.defineProperty(evt, 'keyCode', { get: () => isPress ? 0 : keyCode });
+                        Object.defineProperty(evt, 'charCode', { get: () => isPress ? keyCode : 0 });
+                        Object.defineProperty(evt, 'which', { get: () => keyCode });
 
-                    Object.defineProperty(evt, 'keyCode', { 
-                        get: () => isPress ? 0 : keyCode 
-                    });
-                    
-                    Object.defineProperty(evt, 'charCode', { 
-                        get: () => isPress ? keyCode : 0 
-                    });
-                    
-                    Object.defineProperty(evt, 'which', { 
-                        get: () => keyCode // which 比较通用，一直保持有值
-                    });
-
-                    t.dispatchEvent(evt);
-                } catch (e) {
-                    console.error("Trigger Error:", e);
-                }
+                        t.dispatchEvent(evt);
+                    } catch (e) {
+                        console.error("Key trigger failed:", e);
+                    }
+                });
             });
-        });
+        }, 50); // 延迟 50ms 发射，避开 play/pause 的处理高峰
     }
 
     // --- 3. 核心逻辑 (保持不变) ---
@@ -119,28 +111,22 @@
         const target = e.target;
         if (!target || (target.nodeName !== 'VIDEO' && target.nodeName !== 'AUDIO')) return;
 
-        // 1. 播放结束检测
         if (target.ended) return; 
         if (target.duration && Math.abs(target.currentTime - target.duration) < 0.5) return;
-
-        // 2. 寻找进度(Seeking)检测
         if (target.seeking) return;
 
         if (e.type !== 'play' && e.type !== 'pause') return;
 
         const now = Date.now();
 
-        // 0. 事件防抖
         if (now - lastEventTime < EVENT_DEBOUNCE) return;
         lastEventTime = now;
         
-        // 1. 冷却期检查
         if (now - lastTriggerTime < COOL_DOWN) {
             clickCount = 0; 
             return;
         }
 
-        // 2. 切换视频检测
         if (lastTarget && lastTarget !== target) {
             clickCount = 0;
             if (actionTimer) {
@@ -157,19 +143,19 @@
 
         clickCount++;
 
-        // UI 反馈
         if (clickCount === 1) showCounter("1", "rgba(255,255,255,0.6)");
         if (clickCount === 2) showCounter("2", "rgba(255,255,255,0.8)");
         if (clickCount === 3) showCounter("3", "rgba(255,255,255,1.0)");
 
         if (clickCount >= 3) {
-            triggerKey('h'); // 立即触发 H
+            // 这里调用 triggerKey，内部会延迟 50ms 执行
+            triggerKey('h');
             clickCount = 0;
             lastTriggerTime = now; 
         } else {
             actionTimer = setTimeout(() => {
                 if (clickCount === 2) {
-                    triggerKey('s'); // 倒计时结束触发 S
+                    triggerKey('s');
                     lastTriggerTime = Date.now();
                 }
                 clickCount = 0; 
