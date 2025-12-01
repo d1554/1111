@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         S键映射 (V49 慢动作模仿版)
+// @name         S键映射 (V34增强版-防手势拦截)
 // @namespace    http://tampermonkey.net/
-// @version      49.0
-// @description  检测到快速三连击后，脚本接管并每隔0.5秒模拟一次点击，最后触发H键，完美模拟手动操作
+// @version      50.0
+// @description  基于V34核心逻辑：监听Play/Pause事件；加入CSS防手势，解决按钮三连击被浏览器拦截的问题；修复Firefox H键
 // @author       Gemini Helper
 // @match        *://*/*
 // @grant        none
@@ -12,10 +12,12 @@
 (function() {
     'use strict';
 
-    // --- 1. CSS 防手势 (保留，保证你输入顺畅) ---
+    // --- 0. CSS 防手势 (核心修复：让按钮三连击生效) ---
+    // 强制禁用浏览器的缩放和选中手势，确保第3次点击能穿透给播放器
     function injectAntiGestureStyle() {
         const css = `
-            video, audio, .html5-video-player, .video-wrapper {
+            /* 针对视频、按钮、播放器容器 */
+            video, audio, .html5-video-player, button, .video-wrapper, .control-bar {
                 touch-action: manipulation !important; 
                 -webkit-user-select: none !important;
                 user-select: none !important;
@@ -29,170 +31,182 @@
     }
     injectAntiGestureStyle();
 
-    // --- 2. 视觉提示 ---
-    let tipBox = null;
-    function showTip(text, color = '#fff') {
-        if (!tipBox) {
-            tipBox = document.createElement('div');
-            tipBox.style.cssText = `
+    // --- 1. UI 系统 ---
+    let counterBox = null;
+
+    function initUI() {
+        if (document.body) {
+            counterBox = document.createElement('div');
+            counterBox.style.cssText = `
                 position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-                font-size: 40px; font-weight: bold; color: #fff;
-                text-shadow: 0 0 5px #000; pointer-events: none; z-index: 999999;
-                transition: opacity 0.2s; opacity: 0;
+                font-size: 60px; font-weight: 900; color: rgba(255, 255, 255, 0.8);
+                text-shadow: 0 0 10px #000; z-index: 2147483647; pointer-events: none;
+                display: none; font-family: sans-serif; transition: transform 0.1s;
             `;
-            (document.body || document.documentElement).appendChild(tipBox);
+            document.body.appendChild(counterBox);
+        } else {
+            requestAnimationFrame(initUI);
         }
-        tipBox.innerText = text;
-        tipBox.style.color = color;
-        tipBox.style.opacity = '1';
-        setTimeout(() => { tipBox.style.opacity = '0'; }, 400); // 稍微快点消失
+    }
+    initUI();
+
+    let counterHideTimer;
+    function showCounter(num, color = '#fff') {
+        if (!counterBox) return;
+        counterBox.innerText = num;
+        counterBox.style.color = color;
+        counterBox.style.display = 'block';
+        counterBox.style.transform = 'translate(-50%, -50%) scale(1.1)';
+        
+        setTimeout(() => counterBox.style.transform = 'translate(-50%, -50%) scale(1)', 50);
+
+        clearTimeout(counterHideTimer);
+        counterHideTimer = setTimeout(() => {
+            counterBox.style.display = 'none';
+        }, 500);
     }
 
-    // --- 3. 模拟单次物理点击 ---
-    function simulatePhysicalClick(target) {
-        try {
-            // 模拟完整的一套：按下 -> 抬起 -> 点击
-            const opts = { bubbles: true, cancelable: true, view: window };
-            target.dispatchEvent(new MouseEvent('mousedown', opts));
-            target.dispatchEvent(new MouseEvent('mouseup', opts));
-            target.dispatchEvent(new MouseEvent('click', opts));
+    // --- 2. 键盘发射器 (升级为 Firefox 兼容版) ---
+    // 虽然逻辑回归V34，但按键发送必须用更强的版本，否则Firefox手机版发不出H
+    function triggerKey(keyName, originalTarget) {
+        
+        // 稍微延迟一点点，避开点击冲突
+        setTimeout(() => {
+            if (keyName === 'h') showCounter("H", "#3388ff");
             
-            // 顺便聚焦
-            if (target.focus) target.focus({preventScroll: true});
-        } catch(e) {}
-    }
+            let keyChar = keyName.toLowerCase();
+            let code = 'Key' + keyName.toUpperCase();
+            let keyCode = keyName.toUpperCase().charCodeAt(0); 
+            let charCode = keyName.charCodeAt(0); // 关键：Firefox需要 charCode
 
-    // --- 4. 按键发射器 ---
-    function fireHKey(originalTarget) {
-        let target = originalTarget || document.body;
-        const keyName = 'h';
-        const keyCode = 72;
-        const charCode = 104;
+            // 目标：优先发给视频，没有就发给body
+            const targets = [originalTarget || document.body, document];
 
-        const eventSequence = [
-            { type: 'keydown',  k: keyCode, c: 0 },
-            { type: 'keypress', k: 0,       c: charCode },
-            { type: 'keyup',    k: keyCode, c: 0 }
-        ];
-
-        [target, document].forEach(t => {
-            eventSequence.forEach(evtInfo => {
+            targets.forEach(t => {
+                if(!t) return;
+                
+                // 1. KeyDown
                 try {
-                    const e = new KeyboardEvent(evtInfo.type, {
-                        key: keyName, 
-                        code: 'KeyH',
-                        keyCode: evtInfo.k, which: evtInfo.k || evtInfo.c,
+                    let e = new KeyboardEvent('keydown', {
+                        key: keyChar, code: code, keyCode: keyCode, which: keyCode,
                         bubbles: true, cancelable: true, view: window
                     });
-                    Object.defineProperty(e, 'keyCode', { get: () => evtInfo.k });
-                    Object.defineProperty(e, 'charCode', { get: () => evtInfo.c });
-                    Object.defineProperty(e, 'which',    { get: () => evtInfo.k || evtInfo.c });
+                    Object.defineProperty(e, 'keyCode', { get: () => keyCode });
+                    Object.defineProperty(e, 'which', { get: () => keyCode });
+                    Object.defineProperty(e, 'charCode', { get: () => 0 });
+                    t.dispatchEvent(e);
+                } catch(err) {}
+
+                // 2. KeyPress (Firefox H键核心)
+                try {
+                    let e = new KeyboardEvent('keypress', {
+                        key: keyChar, code: code, keyCode: 0, which: charCode,
+                        bubbles: true, cancelable: true, view: window
+                    });
+                    Object.defineProperty(e, 'keyCode', { get: () => 0 });
+                    Object.defineProperty(e, 'charCode', { get: () => charCode });
+                    Object.defineProperty(e, 'which', { get: () => charCode });
+                    t.dispatchEvent(e);
+                } catch(err) {}
+
+                // 3. KeyUp
+                try {
+                    let e = new KeyboardEvent('keyup', {
+                        key: keyChar, code: code, keyCode: keyCode, which: keyCode,
+                        bubbles: true, cancelable: true, view: window
+                    });
+                    Object.defineProperty(e, 'keyCode', { get: () => keyCode });
                     t.dispatchEvent(e);
                 } catch(err) {}
             });
-        });
+        }, 50);
     }
 
-    function fireSKey(target) {
-        // S键还是保持简单直接触发，因为它本来就是好的
-        const keyCode = 83;
-        const charCode = 115;
-        const e = new KeyboardEvent('keydown', { key: 's', keyCode: 83, which: 83, bubbles: true });
-        Object.defineProperty(e, 'keyCode', { get: () => 83 });
-        (target || document.body).dispatchEvent(e);
+    // --- 3. 核心逻辑 (回归 V34) ---
+    let clickCount = 0;
+    let actionTimer = null;
+    let lastEventTime = 0;   
+    let lastTriggerTime = 0; 
+    let lastTarget = null; 
+
+    // 配置参数
+    const WAIT_FOR_NEXT_CLICK = 1000; 
+    const COOL_DOWN = 2000;           
+    const EVENT_DEBOUNCE = 50;        
+
+    function globalHandler(e) {
+        const target = e.target;
+        if (!target || (target.nodeName !== 'VIDEO' && target.nodeName !== 'AUDIO')) return;
+
+        // ---------------- 防误触检测区 ----------------
+        // 1. 播放结束检测
+        if (target.ended) return; 
+        if (target.duration && Math.abs(target.currentTime - target.duration) < 0.5) return;
+
+        // 2. 寻找进度(Seeking)检测
+        if (target.seeking) return;
+        // --------------------------------------------
+
+        if (e.type !== 'play' && e.type !== 'pause') return;
+
+        const now = Date.now();
+
+        // 0. 事件防抖
+        if (now - lastEventTime < EVENT_DEBOUNCE) return;
+        lastEventTime = now;
         
-        // 补全 keyup
-        const eUp = new KeyboardEvent('keyup', { key: 's', keyCode: 83, which: 83, bubbles: true });
-        Object.defineProperty(eUp, 'keyCode', { get: () => 83 });
-        (target || document.body).dispatchEvent(eUp);
-    }
+        // 1. 冷却期检查
+        if (now - lastTriggerTime < COOL_DOWN) {
+            clickCount = 0; 
+            return;
+        }
 
-    // --- 5. 慢动作执行引擎 ---
-    function runSlowMotionSequence(target) {
-        // 第一下模拟点击 (立即)
-        showTip("模拟 1...", "#aaa");
-        simulatePhysicalClick(target);
-
-        // 第二下模拟点击 (0.5秒后)
-        setTimeout(() => {
-            showTip("模拟 2...", "#ccc");
-            simulatePhysicalClick(target);
-        }, 500);
-
-        // 第三下模拟点击 + 发射 H 键 (1.0秒后)
-        setTimeout(() => {
-            showTip("发射 H !!!", "#3388ff");
-            simulatePhysicalClick(target); // 先点
-            fireHKey(target);             // 后发
-        }, 1000);
-    }
-
-
-    // --- 6. 触控监听 ---
-    let clicks = 0;
-    let clickTimer = null;
-    let safetyLock = false; // 锁住输入，防止执行期间再次触发
-    
-    let startX = 0, startY = 0;
-
-    document.addEventListener('touchstart', (e) => {
-        if (e.touches.length > 1) return;
-        startX = e.touches[0].screenX;
-        startY = e.touches[0].screenY;
-    }, true);
-
-    document.addEventListener('touchend', (e) => {
-        if (safetyLock) return; // 执行慢动作期间，忽略新的点击
-        if (e.changedTouches.length === 0) return;
-        
-        const moveX = Math.abs(e.changedTouches[0].screenX - startX);
-        const moveY = Math.abs(e.changedTouches[0].screenY - startY);
-        if (moveX > 15 || moveY > 15) return;
-
-        // 目标判断
-        let target = e.target;
-        let isVideoArea = false;
-        let current = target;
-        for(let i=0; i<4; i++) {
-            if (current && (current.nodeName === 'VIDEO' || current.nodeName === 'AUDIO' || current.querySelector('video'))) {
-                isVideoArea = true;
-                break;
+        // 2. 切换视频检测
+        if (lastTarget && lastTarget !== target) {
+            clickCount = 0;
+            if (actionTimer) {
+                clearTimeout(actionTimer);
+                actionTimer = null;
             }
-            if(current) current = current.parentElement;
         }
-        if (!isVideoArea) return;
+        lastTarget = target; 
 
-        // 计数
-        clicks++;
+        // 3. 清理旧定时器
+        if (actionTimer) {
+            clearTimeout(actionTimer);
+            actionTimer = null;
+        }
 
-        if (clicks === 1) showTip("1", "rgba(255,255,255,0.5)");
-        if (clicks === 2) showTip("2", "rgba(255,255,255,0.8)");
-        if (clicks === 3) showTip("3", "#0f0");
+        // 4. 计数增加
+        clickCount++;
 
-        if (clickTimer) clearTimeout(clickTimer);
+        // 5. UI 反馈
+        if (clickCount === 1) showCounter("1", "rgba(255,255,255,0.6)");
+        if (clickCount === 2) showCounter("2", "rgba(255,255,255,0.8)");
+        if (clickCount === 3) showCounter("3", "rgba(255,255,255,1.0)");
 
-        if (clicks >= 3) {
-            // === 触发三连击逻辑 ===
-            clicks = 0;
-            safetyLock = true; // 上锁！
-            
-            // 开始执行每隔0.5秒的模拟操作
-            runSlowMotionSequence(target);
-            
-            // 1.5秒后解锁，让用户可以继续操作
-            setTimeout(() => { safetyLock = false; }, 1500);
-
+        // 6. 触发判定
+        if (clickCount >= 3) {
+            // 三连击：触发 H
+            // 传入 target 以便 triggerKey 能发给正确的视频元素
+            triggerKey('h', target);
+            clickCount = 0;
+            lastTriggerTime = now; 
         } else {
-            // === 双击 S 倒计时 ===
-            clickTimer = setTimeout(() => {
-                if (clicks === 2) {
-                    showTip("S", "#fff");
-                    fireSKey(target);
+            // 倒计时
+            actionTimer = setTimeout(() => {
+                if (clickCount === 2) {
+                    // 双击：触发 S
+                    triggerKey('s', target);
+                    lastTriggerTime = Date.now();
                 }
-                clicks = 0;
-            }, 600);
+                clickCount = 0; 
+            }, WAIT_FOR_NEXT_CLICK);
         }
+    }
 
-    }, true);
+    // 监听 Play/Pause
+    window.addEventListener('play', globalHandler, true);
+    window.addEventListener('pause', globalHandler, true);
 
 })();
