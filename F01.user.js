@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         S键映射 (终极焦点夺回版 V45)
+// @name         S键映射 (V46 防手势装甲版)
 // @namespace    http://tampermonkey.net/
-// @version      45.0
-// @description  利用 mousedown 事件欺骗浏览器强制夺回焦点，解决安卓普通模式三击失效问题
+// @version      46.0
+// @description  通过CSS强制禁用视频的默认触控手势(放大/选字)，解决快速三连击被浏览器拦截的问题
 // @author       Gemini Helper
 // @match        *://*/*
 // @grant        none
@@ -12,7 +12,31 @@
 (function() {
     'use strict';
 
-    // --- 1. 提示框 (UI) ---
+    // --- 1. CSS 强力注入 (The Armor) ---
+    // 这是解决"快速点击无效"的核心。
+    // 强制告诉浏览器：在这个视频上，别给我整双击放大、三击选字那些花里胡哨的。
+    function injectAntiGestureStyle() {
+        const css = `
+            video, audio, .html5-video-player {
+                /* 禁止双击缩放，消除300ms延迟 */
+                touch-action: manipulation !important; 
+                /* 禁止长按/三击选中文字 */
+                -webkit-user-select: none !important;
+                -moz-user-select: none !important;
+                -ms-user-select: none !important;
+                user-select: none !important;
+                /* 消除高亮色块 */
+                -webkit-tap-highlight-color: transparent !important;
+                outline: none !important;
+            }
+        `;
+        const style = document.createElement('style');
+        style.textContent = css;
+        (document.head || document.documentElement).appendChild(style);
+    }
+    injectAntiGestureStyle();
+
+    // --- 2. 视觉提示 (UI) ---
     let tipBox = null;
     function showTip(text, color = '#fff') {
         if (!tipBox) {
@@ -31,79 +55,63 @@
         setTimeout(() => { tipBox.style.opacity = '0'; }, 500);
     }
 
-    // --- 2. 核心：带焦点欺骗的按键发送器 ---
+    // --- 3. 焦点夺回与按键发送 ---
     function fireKey(keyName, originalTarget) {
-        
-        // 适当增加延迟到 350ms，给浏览器的三击放大动画一点缓冲时间
+        // 延迟可以适当缩短了，因为CSS禁用了手势，浏览器反应会变快
         setTimeout(() => {
             const target = originalTarget || document.body;
 
-            // === 【核心大招】欺骗浏览器夺回焦点 ===
-            // 安卓普通模式下，三击会导致焦点丢失。
-            // 我们手动触发一个 'mousedown' 事件，假装用户按住了视频。
-            // 这通常能强制浏览器把焦点重新分配给视频元素。
+            // 1. 模拟鼠标按下，再次确保焦点归位
             try {
-                let fakeClick = new MouseEvent('mousedown', {
+                target.dispatchEvent(new MouseEvent('mousedown', {
                     bubbles: true, cancelable: true, view: window
-                });
-                target.dispatchEvent(fakeClick);
-                
+                }));
                 if (target.focus) target.focus({preventScroll: true});
             } catch(e) {}
-            // ======================================
 
-            // 准备按键数据
+            // 2. 构造按键
             const key = keyName.toLowerCase();
-            const code = 'Key' + keyName.toUpperCase();
-            const keyCode = keyName.toUpperCase().charCodeAt(0); // H=72
-            const charCode = keyName.charCodeAt(0); // h=104
+            const keyCode = keyName.toUpperCase().charCodeAt(0);
+            const charCode = keyName.charCodeAt(0);
 
-            // 定义事件包
             const eventSequence = [
                 { type: 'keydown',  k: keyCode, c: 0 },
-                { type: 'keypress', k: 0,       c: charCode }, // Firefox 必须
+                { type: 'keypress', k: 0,       c: charCode },
                 { type: 'keyup',    k: keyCode, c: 0 }
             ];
 
-            // 发送目标：双管齐下
-            // 1. 发给视频元素本身 (针对全屏和现代播放器)
-            // 2. 发给 document (针对全局监听的快捷键)
-            let targets = [target, document]; 
-            
-            targets.forEach(t => {
+            // 3. 发送给目标和document
+            [target, document].forEach(t => {
                 eventSequence.forEach(evtInfo => {
                     try {
                         const e = new KeyboardEvent(evtInfo.type, {
-                            key: key, code: code,
-                            keyCode: evtInfo.k, which: evtInfo.k || evtInfo.c,
+                            key: key, 
+                            code: 'Key' + keyName.toUpperCase(),
+                            keyCode: evtInfo.k, 
+                            which: evtInfo.k || evtInfo.c,
                             bubbles: true, cancelable: true, view: window
                         });
-
                         Object.defineProperty(e, 'keyCode', { get: () => evtInfo.k });
                         Object.defineProperty(e, 'charCode', { get: () => evtInfo.c });
                         Object.defineProperty(e, 'which',    { get: () => evtInfo.k || evtInfo.c });
-
                         t.dispatchEvent(e);
                     } catch(err) {}
                 });
             });
-
-        }, 350); // 延迟 350ms
+        }, 300); // 300ms 延迟
     }
 
-    // --- 3. 计数与防抖逻辑 ---
+    // --- 4. 计数逻辑 (保持不变) ---
     let clicks = 0;
     let clickTimer = null;
     let lastTarget = null;
-    let safetyLock = false; 
+    let safetyLock = false;
 
     function handleStateChange(e) {
         const target = e.target;
         if (!target || (target.nodeName !== 'VIDEO' && target.nodeName !== 'AUDIO')) return;
-
         if (target.ended || target.seeking) return;
         
-        // 切换视频时重置
         if (lastTarget && lastTarget !== target) {
             clicks = 0;
             clearTimeout(clickTimer);
@@ -115,31 +123,31 @@
 
         clicks++;
         
+        // UI 反馈
         if (clicks === 1) showTip("1", "rgba(255,255,255,0.5)");
         if (clicks === 2) showTip("2", "rgba(255,255,255,0.8)");
         if (clicks === 3) showTip("3", "#0f0");
 
         if (clicks >= 3) {
-            // === 三连击 H ===
+            // 三连击 H
             clicks = 0;
-            safetyLock = true;
+            safetyLock = true; // 上锁
             
             showTip("H", "#3388ff");
-            // 调用发送器
             fireKey('h', target);
             
-            // 稍后解锁
+            // 0.5秒后解锁，防止后续操作干扰
             setTimeout(() => { safetyLock = false; }, 500);
 
         } else {
-            // === 等待 S ===
+            // S 键倒计时
             clickTimer = setTimeout(() => {
                 if (clicks === 2) {
                     showTip("S", "#fff");
                     fireKey('s', target);
                 }
                 clicks = 0;
-            }, 1000); // S 键保持 1秒宽容度
+            }, 1000);
         }
     }
 
