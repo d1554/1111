@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         S键映射 (Firefox全屏/普通通杀版 V42)
+// @name         S键映射 (安卓普通模式修复 V43)
 // @namespace    http://tampermonkey.net/
-// @version      42.0
-// @description  双击S，三击H；强制焦点校正，修复普通模式下按键失效问题
+// @version      43.0
+// @description  双击S，三击H；强制清除选中状态+注入TabIndex强制聚焦；修复普通模式焦点丢失
 // @author       Gemini Helper
 // @match        *://*/*
 // @grant        none
@@ -12,7 +12,7 @@
 (function() {
     'use strict';
 
-    // --- 1. UI 系统 (精简版) ---
+    // --- 1. UI 系统 (保持简洁) ---
     let counterBox = null;
     function initUI() {
         if (!document.body) return requestAnimationFrame(initUI);
@@ -39,37 +39,46 @@
         }, 500);
     }
 
-    // --- 2. 键盘发射器 (V42: 焦点强制 + 冒泡穿透) ---
+    // --- 2. 键盘发射器 (V43: 焦点锁定版) ---
     function triggerKey(keyName, originalTarget) {
-        // 延迟保持不变，避开点击冲突
+        
+        // 稍微延长一点点延迟到 300ms，确保安卓的"三击放大"或"选中"动画结束
         setTimeout(() => {
             const isH = keyName.toLowerCase() === 'h';
-            if (isH) showCounter("H", "#3388ff"); // 蓝色提示
+            if (isH) showCounter("H", "#3388ff");
+
+            // --- 【关键步骤 1】清除干扰 ---
+            // 移除因三连击可能产生的文本选中状态，这会抢走键盘焦点
+            if (window.getSelection) {
+                window.getSelection().removeAllRanges();
+            }
+
+            // --- 【关键步骤 2】强制聚焦视频 ---
+            // 如果是在普通模式，焦点可能跑偏了。我们必须手动把焦点拉回视频元素。
+            let focusTarget = originalTarget;
+            if (focusTarget) {
+                // 如果视频元素本身不可聚焦（默认情况），强制赋予它聚焦能力
+                if (!focusTarget.getAttribute('tabindex')) {
+                    focusTarget.setAttribute('tabindex', '-1');
+                }
+                try {
+                    focusTarget.focus({preventScroll: true});
+                    // console.log("强制聚焦到:", focusTarget); 
+                } catch(e) {}
+            }
+
+            // --- 【关键步骤 3】确定发送目标 ---
+            // 优先发给当前（被我们强制）聚焦的元素，其次是 body
+            // 这样能模拟出"用户盯着视频按键盘"的效果
+            let targets = [document.activeElement, focusTarget, document.body, window];
+            targets = [...new Set(targets)]; // 去重
 
             // 键码定义 (保留 V41 验证成功的 Firefox 修正)
             let keyChar = keyName.toLowerCase();
             let code = 'Key' + keyName.toUpperCase();
             let keyCode = keyName.toUpperCase().charCodeAt(0); 
-            let charCode = keyName.toLowerCase().charCodeAt(0); // 104 or 115
+            let charCode = keyName.toLowerCase().charCodeAt(0); 
 
-            // 【核心修改 1】构建完整的“族谱”链条
-            // 我们不依赖事件冒泡，而是手动把事件发给每一个父级
-            // 因为有些网站会在中间层拦截 stopPropagation
-            let targets = [window, document, document.body];
-            
-            if (originalTarget) {
-                // 尝试让视频本身获得焦点
-                try { originalTarget.focus({preventScroll: true}); } catch(e){}
-
-                let current = originalTarget;
-                while (current && current !== document.body) {
-                    targets.unshift(current); // 把父级加入列表
-                    current = current.parentElement;
-                }
-            }
-            targets = [...new Set(targets)]; // 去重
-
-            // 【核心修改 2】对列表中的每一个元素发射事件
             targets.forEach(t => {
                 if(!t) return;
 
@@ -85,7 +94,7 @@
                     t.dispatchEvent(evtDown);
                 } catch(e) {}
 
-                // 2. keypress (Firefox 关键)
+                // 2. keypress (Firefox 核心)
                 try {
                     let evtPress = new KeyboardEvent('keypress', {
                         key: keyChar, code: code, keyCode: 0, which: charCode,
@@ -108,7 +117,7 @@
                 } catch(e) {}
             });
 
-        }, 250);
+        }, 300); // 延迟调整为 300ms
     }
 
     // --- 3. 核心逻辑 (保持不变) ---
