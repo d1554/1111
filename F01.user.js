@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         S键映射 (V39-暴力清场防吞版)
+// @name         S键映射 (安卓强力穿透版)
 // @namespace    http://tampermonkey.net/
 // @version      39.0
-// @description  强制清除Firefox三击产生的文本选区；H键连发3次确保穿透；保留防误触
+// @description  1秒宽容度；修复安卓H键无效(地毯式冒泡触发)；保留S键双击；
 // @author       Gemini Helper
 // @match        *://*/*
 // @grant        none
@@ -12,7 +12,7 @@
 (function() {
     'use strict';
 
-    // --- 1. UI 系统 ---
+    // --- 1. UI 系统 (保持不变) ---
     let counterBox = null;
 
     function initUI() {
@@ -47,31 +47,13 @@
         }, 500);
     }
 
-    // --- 2. 键盘发射器 (暴力清场 + 连发) ---
+    // --- 2. 键盘发射器 (安卓穿透版) ---
     function triggerKey(keyName, originalTarget) {
-        // 稍微延迟一丢丢，等Firefox把“全选”这件蠢事做完
+        // 保持 250ms 延迟，避开安卓的三击放大/文本选中干扰
         setTimeout(() => {
-            
-            // === 【第一步：暴力清场】 ===
-            // 1. 清除三击产生的高亮选区 (这是Firefox吞事件的罪魁祸首)
-            if (window.getSelection) {
-                window.getSelection().removeAllRanges();
-            }
-            // 2. 强制当前焦点元素失焦 (Reset)
-            if (document.activeElement) {
-                document.activeElement.blur();
-            }
-            // 3. 重新把焦点聚焦回视频 (如果有)，或者聚焦到body
-            if (originalTarget && originalTarget.focus) {
-                originalTarget.focus();
-            } else {
-                document.body.focus();
-            }
-
-            // === 【第二步：按键构造】 ===
             let keyChar = keyName;
             let keyCode = (keyName === 's') ? 83 : 72;
-            
+
             if (keyName === 'h') showCounter("H", "#3388ff");
 
             const eventConfig = {
@@ -79,38 +61,49 @@
                 code: 'Key' + keyChar.toUpperCase(),
                 keyCode: keyCode, 
                 which: keyCode,
-                charCode: keyCode, // 为keypress补全
                 bubbles: true, cancelable: true, view: window
             };
 
-            // === 【第三步：地毯式轰炸】 ===
-            // 定义一个发送函数
-            const fire = () => {
-                // 优先发给 originalTarget (视频本身)，不行就发给 document
-                const t = originalTarget || document.body;
-                
-                // keydown -> keypress -> keyup
-                t.dispatchEvent(new KeyboardEvent('keydown', eventConfig));
-                t.dispatchEvent(new KeyboardEvent('keypress', eventConfig)); // 很多H键绑定在这里
-                t.dispatchEvent(new KeyboardEvent('keyup', eventConfig));
-            };
+            // 【核心修改】构建目标列表：不仅包含 document/window，
+            // 还要包含视频元素及其所有父级 div (直到 body)
+            // 很多移动端网页的事件监听器绑在视频外面的 wrapper 层上
+            let targets = [window, document, document.body];
+            
+            if (originalTarget) {
+                let current = originalTarget;
+                // 向上查找 5 层父元素 (通常播放器容器就在这几层里)
+                for (let i = 0; i < 5; i++) {
+                    if (current) {
+                        targets.push(current);
+                        current = current.parentElement;
+                    }
+                }
+            }
+            
+            // 去重
+            targets = [...new Set(targets)];
 
-            // 连发3次，间隔20ms，确保有一发能钻过浏览器的事件缝隙
-            fire(); 
-            setTimeout(fire, 20);
-            setTimeout(fire, 40);
-
-        }, 150); // 延迟150ms开始执行，避开三击物理高峰
+            // 疯狂触发
+            targets.forEach(t => {
+                if(t) {
+                    try {
+                        t.dispatchEvent(new KeyboardEvent('keydown', eventConfig));
+                        t.dispatchEvent(new KeyboardEvent('keyup', eventConfig));
+                        // 安卓 Firefox 对 keypress 支持较弱，但也发一下以防万一
+                        t.dispatchEvent(new KeyboardEvent('keypress', eventConfig));
+                    } catch(e) {}
+                }
+            });
+        }, 250);
     }
 
-    // --- 3. 核心逻辑 (保持防误触) ---
+    // --- 3. 核心逻辑 (保持不变) ---
     let clickCount = 0;
     let actionTimer = null;
     let lastEventTime = 0;   
     let lastTriggerTime = 0; 
     let lastTarget = null; 
 
-    // 配置参数
     const WAIT_FOR_NEXT_CLICK = 1000; 
     const COOL_DOWN = 2000;           
     const EVENT_DEBOUNCE = 50;        
@@ -156,7 +149,6 @@
         if (clickCount === 3) showCounter("3", "rgba(255,255,255,1.0)");
 
         if (clickCount >= 3) {
-            // 将 target 传进去，方便我们重新聚焦
             triggerKey('h', target); 
             clickCount = 0;
             lastTriggerTime = now; 
