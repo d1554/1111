@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         S键映射 (安卓族谱遍历通杀版 V44)
+// @name         S键映射 (重生版 V1.0)
 // @namespace    http://tampermonkey.net/
-// @version      44.0
-// @description  双击S，三击H；采用全DOM层级遍历触发，解决安卓普通模式找不到监听目标的问题
+// @version      1.0
+// @description  从零重写：基于S键成功的逻辑，统一延迟触发机制，解决安卓焦点丢失问题
 // @author       Gemini Helper
 // @match        *://*/*
 // @grant        none
@@ -12,175 +12,150 @@
 (function() {
     'use strict';
 
-    // --- 1. UI (保留) ---
-    let counterBox = null;
-    function initUI() {
-        if (!document.body) return requestAnimationFrame(initUI);
-        counterBox = document.createElement('div');
-        counterBox.style.cssText = `
-            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            font-size: 60px; font-weight: 900; color: rgba(255, 255, 255, 0.8);
-            text-shadow: 0 0 10px #000; z-index: 2147483647; pointer-events: none;
-            display: none; transition: opacity 0.2s;
-        `;
-        document.body.appendChild(counterBox);
-    }
-    initUI();
-
-    function showCounter(num, color='#fff') {
-        if (!counterBox) return;
-        counterBox.innerText = num;
-        counterBox.style.color = color;
-        counterBox.style.display = 'block';
-        counterBox.style.opacity = '1';
-        setTimeout(() => {
-            counterBox.style.opacity = '0';
-            setTimeout(() => counterBox.style.display = 'none', 200);
-        }, 500);
-    }
-
-    // --- 2. 键盘发射器 (V44: 族谱遍历 + 模拟 Windows 键码) ---
-    function triggerKey(keyName, originalTarget) {
+    // ==========================================
+    // 1. 视觉反馈系统 (Visual Feedback)
+    // 简单的视觉反馈，确认脚本是否“听到”了点击
+    // ==========================================
+    let tipBox = null;
+    function showTip(text, color = '#fff') {
+        if (!tipBox) {
+            tipBox = document.createElement('div');
+            tipBox.style.cssText = `
+                position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                font-size: 50px; font-weight: bold; color: #fff;
+                text-shadow: 0 0 5px #000; pointer-events: none; z-index: 999999;
+                transition: opacity 0.2s; opacity: 0;
+            `;
+            (document.body || document.documentElement).appendChild(tipBox);
+        }
+        tipBox.innerText = text;
+        tipBox.style.color = color;
+        tipBox.style.opacity = '1';
         
-        // 延迟 300ms 避开安卓触摸冲突
-        setTimeout(() => {
-            const isH = keyName.toLowerCase() === 'h';
-            if (isH) showCounter("H", "#3388ff");
-
-            // --- 键码定义 (模拟标准 Windows 键盘事件) ---
-            let keyChar = keyName.toLowerCase();
-            let code = 'Key' + keyName.toUpperCase();
-            let keyCode = keyName.toUpperCase().charCodeAt(0); // H=72
-            let charCode = keyName.toLowerCase().charCodeAt(0); // h=104
-
-            // --- 【核心逻辑】构建“全家桶”目标列表 ---
-            // 既然不知道谁在监听，就给从 Video 到 Root 的所有元素都发一遍
-            let targets = [];
-            
-            // 1. 视频元素本身
-            if (originalTarget) targets.push(originalTarget);
-            
-            // 2. 向上遍历所有父级 (div, section, app-container...)
-            let current = originalTarget ? originalTarget.parentElement : null;
-            while (current) {
-                targets.push(current);
-                current = current.parentElement;
-            }
-            
-            // 3. 保底目标
-            targets.push(document.body);
-            targets.push(document.documentElement); // html 标签
-            targets.push(document);
-            targets.push(window);
-
-            // 去重
-            targets = [...new Set(targets)];
-
-            // --- 疯狂发送 ---
-            targets.forEach(t => {
-                if(!t) return;
-
-                // 1. keydown (模拟 Windows 物理按下)
-                try {
-                    let evtDown = new KeyboardEvent('keydown', {
-                        key: keyChar, code: code, keyCode: keyCode, which: keyCode,
-                        bubbles: false, // 我们自己手动遍历了，不需要 bubbles，防止重复触发
-                        cancelable: true, view: window,
-                        composed: true // 穿透 Shadow DOM
-                    });
-                    Object.defineProperty(evtDown, 'keyCode', { get: () => keyCode });
-                    Object.defineProperty(evtDown, 'which', { get: () => keyCode });
-                    Object.defineProperty(evtDown, 'charCode', { get: () => 0 });
-                    t.dispatchEvent(evtDown);
-                } catch(e) {}
-
-                // 2. keypress (Firefox 字符输入，模拟 Windows 输入文字)
-                try {
-                    let evtPress = new KeyboardEvent('keypress', {
-                        key: keyChar, code: code, keyCode: 0, which: charCode,
-                        bubbles: false,
-                        cancelable: true, view: window,
-                        composed: true
-                    });
-                    Object.defineProperty(evtPress, 'keyCode', { get: () => 0 });
-                    Object.defineProperty(evtPress, 'charCode', { get: () => charCode }); // 关键: 104
-                    Object.defineProperty(evtPress, 'which', { get: () => charCode });
-                    t.dispatchEvent(evtPress);
-                } catch(e) {}
-
-                // 3. keyup (模拟 Windows 抬起)
-                try {
-                    let evtUp = new KeyboardEvent('keyup', {
-                        key: keyChar, code: code, keyCode: keyCode, which: keyCode,
-                        bubbles: false,
-                        cancelable: true, view: window,
-                        composed: true
-                    });
-                    Object.defineProperty(evtUp, 'keyCode', { get: () => keyCode });
-                    t.dispatchEvent(evtUp);
-                } catch(e) {}
-            });
-
-        }, 300);
+        // 500ms 后消失
+        setTimeout(() => { tipBox.style.opacity = '0'; }, 500);
     }
 
-    // --- 3. 核心逻辑 (保持 V43 逻辑) ---
-    let clickCount = 0;
-    let actionTimer = null;
-    let lastEventTime = 0;   
-    let lastTriggerTime = 0; 
-    let lastTarget = null; 
+    // ==========================================
+    // 2. 核心按键模拟器 (The Trigger)
+    // 既然 S 键能用，我们就用最标准的 Firefox 兼容写法
+    // ==========================================
+    function fireKey(keyName, targetElement) {
+        // 再次确认目标存在，如果不存在则回退到 body
+        const target = targetElement || document.body;
 
-    const WAIT_FOR_NEXT_CLICK = 1000; 
-    const COOL_DOWN = 2000;           
-    const EVENT_DEBOUNCE = 50;        
+        // 1. 强制夺取焦点 (关键步骤)
+        // 安卓非全屏模式下，焦点常因为点击而跑偏，必须强拉回来
+        try {
+            if (target.focus) target.focus();
+        } catch(e) {}
 
-    function globalHandler(e) {
+        const key = keyName.toLowerCase();
+        const code = 'Key' + keyName.toUpperCase();
+        const keyCode = keyName.toUpperCase().charCodeAt(0); // H=72, S=83
+        
+        // Firefox keypress 需要 charCode
+        const charCode = keyName.charCodeAt(0); // h=104, s=115
+
+        // 构建事件包
+        const eventSequence = [
+            { type: 'keydown',  k: keyCode, c: 0 },
+            { type: 'keypress', k: 0,       c: charCode }, // Firefox 核心
+            { type: 'keyup',    k: keyCode, c: 0 }
+        ];
+
+        eventSequence.forEach(evtInfo => {
+            try {
+                const e = new KeyboardEvent(evtInfo.type, {
+                    key: key,
+                    code: code,
+                    keyCode: evtInfo.k, // 标准写法
+                    which: evtInfo.k || evtInfo.c,
+                    bubbles: true,
+                    cancelable: true,
+                    view: window
+                });
+
+                // Firefox 强力补丁
+                Object.defineProperty(e, 'keyCode', { get: () => evtInfo.k });
+                Object.defineProperty(e, 'charCode', { get: () => evtInfo.c });
+                Object.defineProperty(e, 'which',    { get: () => evtInfo.k || evtInfo.c });
+
+                target.dispatchEvent(e);
+            } catch(err) {
+                console.error('Trigger Error:', err);
+            }
+        });
+    }
+
+    // ==========================================
+    // 3. 逻辑控制器 (Logic Controller)
+    // ==========================================
+    let clicks = 0;
+    let clickTimer = null;
+    let lastTarget = null;
+    let safetyLock = false; // 防止重复触发
+
+    // 监听 Play 和 Pause 事件
+    function handleStateChange(e) {
         const target = e.target;
+        
+        // 过滤非视频元素
         if (!target || (target.nodeName !== 'VIDEO' && target.nodeName !== 'AUDIO')) return;
 
-        if (target.ended) return; 
-        if (target.duration && Math.abs(target.currentTime - target.duration) < 0.5) return;
-        if (target.seeking) return;
-
-        if (e.type !== 'play' && e.type !== 'pause') return;
-
-        const now = Date.now();
-        if (now - lastEventTime < EVENT_DEBOUNCE) return;
-        lastEventTime = now;
+        // 1. 过滤：视频结束或拖拽中
+        if (target.ended || target.seeking) return;
         
-        if (now - lastTriggerTime < COOL_DOWN) {
-            clickCount = 0; 
-            return;
-        }
-
+        // 2. 过滤：切换视频 (重置计数)
         if (lastTarget && lastTarget !== target) {
-            clickCount = 0;
-            if (actionTimer) clearTimeout(actionTimer);
+            clicks = 0;
+            clearTimeout(clickTimer);
         }
-        lastTarget = target; 
+        lastTarget = target;
 
-        if (actionTimer) clearTimeout(actionTimer);
+        // 3. 计数逻辑
+        // 每次点击都清除旧计时器
+        if (clickTimer) clearTimeout(clickTimer);
+        
+        // 冷却锁：如果刚刚触发过大招，忽略后续微小抖动
+        if (safetyLock) return;
 
-        clickCount++;
-        showCounter(clickCount);
+        clicks++;
+        
+        // 视觉反馈
+        if (clicks === 1) showTip("1", "rgba(255,255,255,0.5)");
+        if (clicks === 2) showTip("2", "rgba(255,255,255,0.8)");
+        if (clicks === 3) showTip("3", "#0f0");
 
-        if (clickCount >= 3) {
-            triggerKey('h', target); 
-            clickCount = 0;
-            lastTriggerTime = now; 
+        // 4. 触发决策 (核心改动)
+        if (clicks >= 3) {
+            // === 三连击逻辑 ===
+            clicks = 0;
+            safetyLock = true; // 开启冷却锁
+
+            // 【关键改动】：H 键不再立即触发，而是延迟 300ms
+            // 让安卓系统完成它的三击判定，把焦点还给我们
+            setTimeout(() => {
+                showTip("H", "#3388ff");
+                fireKey('h', target);
+                safetyLock = false; // 解锁
+            }, 300);
+
         } else {
-            actionTimer = setTimeout(() => {
-                if (clickCount === 2) {
-                    triggerKey('s', target);
-                    lastTriggerTime = Date.now();
+            // === 一击或二击等待逻辑 ===
+            clickTimer = setTimeout(() => {
+                if (clicks === 2) {
+                    // === 双击逻辑 ===
+                    showTip("S", "#fff");
+                    fireKey('s', target);
                 }
-                clickCount = 0; 
-            }, WAIT_FOR_NEXT_CLICK);
+                clicks = 0; // 重置
+            }, 1000); // S键 1秒宽容度
         }
     }
 
-    window.addEventListener('play', globalHandler, true);
-    window.addEventListener('pause', globalHandler, true);
+    // 使用捕获模式监听，确保最先获取事件
+    window.addEventListener('play', handleStateChange, true);
+    window.addEventListener('pause', handleStateChange, true);
 
 })();
