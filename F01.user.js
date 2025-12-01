@@ -1,29 +1,58 @@
 // ==UserScript==
-// @name         S键映射 V36 (PC+Android 双模自动适配版)
+// @name         S键映射 (V36 诊断调试版)
 // @namespace    http://tampermonkey.net/
 // @version      36.0
-// @description  PC 捕获模式 / Android 冒泡模式；2击S 3击H；完整防误触、切换视频、拖拽检测；兼容 Chrome/Firefox/Edge/Kiwi/三星浏览器等。
-// @author       
+// @description  3连击H；屏幕右下角显示实时按键日志，用于排查模拟按键是否成功发出
+// @author       Gemini Helper
 // @match        *://*/*
 // @grant        none
 // @run-at       document-start
 // ==/UserScript==
 
 (function() {
-'use strict';
+    'use strict';
 
-    // ---------------------------
-    // 设备判断（自动切换事件模式）
-    // ---------------------------
-    const isAndroid = /Android|Linux/i.test(navigator.userAgent);
-    const USE_CAPTURE = !isAndroid;  // PC = true, Android = false
+    // ==========================================
+    // --- 0. 调试控制台 (新增) ---
+    // ==========================================
+    let debugBox = null;
 
-    // Debug 可打印：
-    // console.log("Android?", isAndroid, " 事件模式:", USE_CAPTURE ? "捕获" : "冒泡");
+    function initDebugUI() {
+        if (document.body) {
+            debugBox = document.createElement('div');
+            debugBox.style.cssText = `
+                position: fixed; bottom: 10px; right: 10px; width: 300px; height: 200px;
+                background: rgba(0, 0, 0, 0.85); color: #0f0; font-family: monospace;
+                font-size: 12px; z-index: 999999; padding: 10px; overflow-y: auto;
+                pointer-events: none; border-radius: 5px; border: 1px solid #333;
+            `;
+            debugBox.innerHTML = '<div style="border-bottom:1px solid #444; margin-bottom:5px">== 按键监控启动 ==</div>';
+            document.body.appendChild(debugBox);
 
-    // ------------------ UI 系统 -------------------
+            // 监听全局按键，把它们打印出来
+            window.addEventListener('keydown', (e) => {
+                logKey(`[捕获] Key: ${e.key} | Code: ${e.code} | Trusted: ${e.isTrusted}`);
+            }, true);
+
+        } else {
+            requestAnimationFrame(initDebugUI);
+        }
+    }
+    initDebugUI();
+
+    function logKey(msg) {
+        if (!debugBox) return;
+        const line = document.createElement('div');
+        line.innerText = `> ${new Date().toLocaleTimeString().split(' ')[0]} ${msg}`;
+        debugBox.insertBefore(line, debugBox.children[1]); // 插入到顶部
+        // 保持只有20行
+        if (debugBox.children.length > 20) debugBox.lastChild.remove();
+    }
+
+    // ==========================================
+    // --- 1. UI 系统 (计数显示) ---
+    // ==========================================
     let counterBox = null;
-
     function initUI() {
         if (document.body) {
             counterBox = document.createElement('div');
@@ -31,7 +60,7 @@
                 position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
                 font-size: 60px; font-weight: 900; color: rgba(255, 255, 255, 0.8);
                 text-shadow: 0 0 10px #000; z-index: 2147483647; pointer-events: none;
-                display: none; font-family: sans-serif; transition: transform 0.1s;
+                display: none; font-family: sans-serif;
             `;
             document.body.appendChild(counterBox);
         } else {
@@ -46,103 +75,89 @@
         counterBox.innerText = num;
         counterBox.style.color = color;
         counterBox.style.display = 'block';
-        counterBox.style.transform = 'translate(-50%, -50%) scale(1.1)';
-        setTimeout(() => counterBox.style.transform = 'translate(-50%, -50%) scale(1)', 50);
-
         clearTimeout(counterHideTimer);
         counterHideTimer = setTimeout(() => {
             counterBox.style.display = 'none';
         }, 500);
     }
 
-    // ------------------ 键盘发射器 -------------------
-    function triggerKey(name) {
+    // ==========================================
+    // --- 2. 键盘发射器 (带日志) ---
+    // ==========================================
+    function triggerKey(keyName, targetElement) {
         let keyChar, keyCode;
+        
+        if (keyName === 's') {
+            keyChar = 's'; keyCode = 83;
+        } else if (keyName === 'h') {
+            keyChar = 'h'; keyCode = 72;
+            showCounter("H", "#3388ff");
+        }
 
-        if (name === "s") { keyChar = "s"; keyCode = 83; showCounter("S", "#ffffff"); }
-        else if (name === "h") { keyChar = "h"; keyCode = 72; showCounter("H", "#3388ff"); }
+        logKey(`[尝试发送] 准备模拟: ${keyChar.toUpperCase()}`);
 
-        const cfg = {
-            key: keyChar,
-            code: "Key" + keyChar.toUpperCase(),
-            keyCode, which: keyCode,
+        const eventConfig = {
+            key: keyChar, 
+            code: 'Key' + keyChar.toUpperCase(),
+            keyCode: keyCode, 
+            which: keyCode,
             bubbles: true, cancelable: true, view: window
         };
+        
+        // 确定目标
+        const targets = [];
+        if (targetElement) {
+            // 尝试强制聚焦
+            try { targetElement.focus(); } catch(e) {}
+            targets.push(targetElement);
+        }
+        targets.push(document.body);
+        targets.push(document.documentElement);
 
-        [document.activeElement, document.body, document.documentElement].forEach(t => {
-            if (t) {
-                try {
-                    t.dispatchEvent(new KeyboardEvent("keydown", cfg));
-                    t.dispatchEvent(new KeyboardEvent("keyup", cfg));
-                } catch(e) {}
-            }
+        const uniqueTargets = [...new Set(targets)];
+
+        // 发送
+        uniqueTargets.forEach(t => {
+            try {
+                t.dispatchEvent(new KeyboardEvent('keydown', eventConfig));
+                // 为了兼容性，多发几个事件
+                t.dispatchEvent(new KeyboardEvent('keypress', eventConfig));
+                t.dispatchEvent(new KeyboardEvent('keyup', eventConfig));
+            } catch(e) {}
         });
     }
 
-    // ------------------ 连击逻辑核心 -------------------
+    // ==========================================
+    // --- 3. 核心逻辑 (保持不变) ---
+    // ==========================================
     let clickCount = 0;
     let actionTimer = null;
-    let lastClickTime = 0;
-    let lastTriggerTime = 0;
-    let lastTarget = null;
+    let lastEventTime = 0;   
+    let lastTriggerTime = 0; 
+    let lastTarget = null; 
 
-    const WAIT_NEXT = 1000;   // 1 秒连击窗口
-    const COOL_DOWN = 2000;
-    const DEBOUNCE = 80;
+    const WAIT_FOR_NEXT_CLICK = 1000; 
+    const COOL_DOWN = 2000;            
+    const EVENT_DEBOUNCE = 50;        
 
-    // ------------------ 点击处理主逻辑 -------------------
-    function clickHandler(e) {
+    function globalHandler(e) {
         const target = e.target;
-        if (!target || (target.nodeName !== "VIDEO" && target.nodeName !== "AUDIO")) return;
+        if (!target || (target.nodeName !== 'VIDEO' && target.nodeName !== 'AUDIO')) return;
+        if (target.ended || target.seeking) return;
+        if (e.type !== 'play' && e.type !== 'pause') return;
 
         const now = Date.now();
+        if (now - lastEventTime < EVENT_DEBOUNCE) return;
+        lastEventTime = now;
+        
+        if (now - lastTriggerTime < COOL_DOWN) { clickCount = 0; return; }
+        if (lastTarget && lastTarget !== target) { clickCount = 0; if (actionTimer) clearTimeout(actionTimer); }
+        lastTarget = target; 
+        if (actionTimer) { clearTimeout(actionTimer); actionTimer = null; }
 
-        // 防抖
-        if (now - lastClickTime < DEBOUNCE) return;
-        lastClickTime = now;
-
-        // 冷却期
-        if (now - lastTriggerTime < COOL_DOWN) {
-            clickCount = 0;
-            return;
-        }
-
-        // 切换视频
-        if (lastTarget && lastTarget !== target) {
-            clickCount = 0;
-            if (actionTimer) clearTimeout(actionTimer);
-        }
-        lastTarget = target;
-
-        // 计数
         clickCount++;
-
+        
+        // UI 反馈
         if (clickCount === 1) showCounter("1", "rgba(255,255,255,0.6)");
         if (clickCount === 2) showCounter("2", "rgba(255,255,255,0.8)");
-        if (clickCount === 3) showCounter("3", "rgba(255,255,255,1)");
-
-        // 三击立即触发H
-        if (clickCount >= 3) {
-            triggerKey("h");
-            clickCount = 0;
-            lastTriggerTime = now;
-            return;
-        }
-
-        // 二击延迟判定
-        if (actionTimer) clearTimeout(actionTimer);
-
-        actionTimer = setTimeout(() => {
-            if (clickCount === 2) {
-                triggerKey("s");
-                lastTriggerTime = Date.now();
-            }
-            clickCount = 0;
-        }, WAIT_NEXT);
-    }
-
-    // PC：捕获阶段更稳定
-    // Android：必须冒泡，否则第三击事件被吞
-    window.addEventListener("click", clickHandler, USE_CAPTURE);
-
-})();
+        if (clickCount === 3) show
