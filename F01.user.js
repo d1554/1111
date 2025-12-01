@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         S键映射 (V53 安全挂载诊断版)
+// @name         S键映射 (V35 Debug 强力日志版)
 // @namespace    http://tampermonkey.net/
-// @version      53.0
-// @description  修复调试窗口不显示的问题；强制等待页面加载完成后再挂载UI；顶部显示日志
+// @version      35.0
+// @description  屏幕右侧显示详细Log，用于调试3连击失效问题
 // @author       Gemini Helper
 // @match        *://*/*
 // @grant        none
@@ -12,63 +12,63 @@
 (function() {
     'use strict';
 
-    // --- 全局变量 ---
-    let debugBox = null;
-    let counterBox = null;
-    let hasLoaded = false;
-
     // ==========================================
-    // 1. 安全挂载系统 (Safe Mount System)
+    // --- DEBUG 窗口系统 (最优先加载) ---
     // ==========================================
-    function tryMountUI() {
-        if (hasLoaded) return; // 防止重复挂载
-        if (!document.body) return; // 身体没长好，下次再来
+    let debugPanel = null;
 
-        hasLoaded = true;
-
-        // --- A. 创建调试窗口 (顶部) ---
-        debugBox = document.createElement('div');
-        debugBox.style.cssText = `
-            position: fixed; top: 0; left: 0; width: 100%; height: 30vh;
-            background: rgba(0,0,0,0.95); color: #0f0; font-size: 12px; line-height: 1.2;
-            overflow-y: auto; z-index: 2147483647; padding: 5px;
-            border-bottom: 2px solid #fff; font-family: monospace; pointer-events: none;
-            word-break: break-all;
-        `;
-        document.body.appendChild(debugBox);
-        log(">>> V53 诊断系统挂载成功", "#fff");
-        log(">>> 窗口位于顶部，请三连击测试", "#fff");
-
-        // --- B. 创建大计数器 (中央) ---
-        counterBox = document.createElement('div');
-        counterBox.style.cssText = `
-            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            font-size: 80px; font-weight: 900; color: rgba(255, 255, 255, 0.9);
-            text-shadow: 0 0 10px #000; z-index: 2147483646; pointer-events: none;
-            display: none; transition: opacity 0.1s;
-        `;
-        document.body.appendChild(counterBox);
-    }
-
-    // 启动定时器，每100ms检查一次，直到挂载成功
-    const mountTimer = setInterval(() => {
+    function initDebugUI() {
         if (document.body) {
-            tryMountUI();
-            clearInterval(mountTimer);
+            debugPanel = document.createElement('div');
+            debugPanel.id = 'gemini-debug-panel';
+            debugPanel.style.cssText = `
+                position: fixed; top: 0; right: 0; width: 350px; height: 100vh;
+                background: rgba(0, 0, 0, 0.7); color: #0f0; font-family: monospace;
+                font-size: 12px; z-index: 2147483647; overflow-y: auto;
+                padding: 10px; pointer-events: none; /* 让点击穿透，不影响操作 */
+                user-select: text; /* 允许复制文本 */
+                pointer-events: auto; /* 改为auto允许鼠标滚动和复制 */
+                border-left: 2px solid #fff;
+            `;
+            document.body.appendChild(debugPanel);
+            log("=== Debug Window Ready ===");
+            log("等待视频事件...");
+        } else {
+            requestAnimationFrame(initDebugUI);
         }
-    }, 100);
+    }
+    requestAnimationFrame(initDebugUI);
+
+    function log(msg) {
+        if (!debugPanel) return;
+        const time = new Date().toISOString().split('T')[1].slice(0, -1); // HH:mm:ss.sss
+        const line = document.createElement('div');
+        line.style.borderBottom = "1px solid #333";
+        line.innerText = `[${time}] ${msg}`;
+        debugPanel.insertBefore(line, debugPanel.firstChild); // 最新消息在最上面
+        // 限制日志行数，防止卡顿
+        if (debugPanel.children.length > 50) {
+            debugPanel.removeChild(debugPanel.lastChild);
+        }
+    }
 
     // ==========================================
-    // 2. 日志与UI工具
+    // --- 1. UI 系统 (大数字提示) ---
     // ==========================================
-    function log(msg, color = '#0f0') {
-        if (!debugBox) return; // 如果UI还没挂载，日志先丢弃(或存队列，这里简化处理)
-        const line = document.createElement('div');
-        const time = new Date().toLocaleTimeString().split(' ')[0] + '.' + new Date().getMilliseconds();
-        line.innerHTML = `<span style="color:#666">[${time}]</span> <span style="color:${color}">${msg}</span>`;
-        // 插入到最前面，方便手机看最新消息
-        debugBox.insertBefore(line, debugBox.firstChild);
+    let counterBox = null;
+    function initUI() {
+        if (document.body) {
+            counterBox = document.createElement('div');
+            counterBox.style.cssText = `
+                position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                font-size: 60px; font-weight: 900; color: rgba(255, 255, 255, 0.8);
+                text-shadow: 0 0 10px #000; z-index: 2147483646; pointer-events: none;
+                display: none; font-family: sans-serif; transition: transform 0.1s;
+            `;
+            document.body.appendChild(counterBox);
+        }
     }
+    initUI();
 
     let counterHideTimer;
     function showCounter(num, color = '#fff') {
@@ -76,87 +76,46 @@
         counterBox.innerText = num;
         counterBox.style.color = color;
         counterBox.style.display = 'block';
+        counterBox.style.transform = 'translate(-50%, -50%) scale(1.1)';
+        setTimeout(() => counterBox.style.transform = 'translate(-50%, -50%) scale(1)', 50);
         clearTimeout(counterHideTimer);
         counterHideTimer = setTimeout(() => { counterBox.style.display = 'none'; }, 500);
     }
 
     // ==========================================
-    // 3. 键盘事件监听 (验证系统是否收到)
+    // --- 2. 键盘发射器 ---
     // ==========================================
-    window.addEventListener('keydown', (e) => {
-        const src = e.isTrusted ? "物理" : "脚本";
-        log(`👂 系统收到[${src}] Key:${e.key} Code:${e.keyCode}`, "#ff00ff");
-    }, true);
-
-    // ==========================================
-    // 4. CSS 防手势
-    // ==========================================
-    function injectCSS() {
-        const css = `video, audio, button, .video-wrapper { touch-action: manipulation !important; }`;
-        const style = document.createElement('style');
-        style.textContent = css;
-        (document.head || document.documentElement).appendChild(style);
-    }
-    injectCSS();
-
-    // ==========================================
-    // 5. 按键发射器 (V51 混合版)
-    // ==========================================
-    function triggerKey(keyName, originalTarget) {
-        log(`🚀 发射按键: ${keyName.toUpperCase()}`, "orange");
+    function triggerKey(keyName) {
+        log(`【发射指令】 >>> 模拟按键: ${keyName.toUpperCase()}`);
+        let keyChar, keyCode;
         
-        const targets = [originalTarget || document.body, document];
-        
-        if (keyName === 's') { // S键：原始逻辑
-            const keyCode = 83;
-            targets.forEach(t => {
-                if(!t) return;
-                try {
-                    let e = new KeyboardEvent('keydown', {
-                        key: 's', code: 'KeyS', keyCode: keyCode, which: keyCode,
-                        bubbles: true, cancelable: true, view: window
-                    });
-                    t.dispatchEvent(e);
-                    t.dispatchEvent(new KeyboardEvent('keyup', {
-                        key: 's', code: 'KeyS', keyCode: keyCode, which: keyCode,
-                        bubbles: true, cancelable: true, view: window
-                    }));
-                } catch(err) { log("Send Error: " + err.message, "red"); }
-            });
+        if (keyName === 's') {
+            keyChar = 's'; keyCode = 83;
+        } else if (keyName === 'h') {
+            keyChar = 'h'; keyCode = 72;
+            showCounter("H", "#3388ff");
         }
 
-        if (keyName === 'h') { // H键：Firefox 补丁
-            const keyCode = 72;
-            const charCode = 104;
-            targets.forEach(t => {
-                if(!t) return;
-                try {
-                    // KeyDown
-                    let eDown = new KeyboardEvent('keydown', {
-                        key: 'h', code: 'KeyH', keyCode: keyCode, which: keyCode,
-                        bubbles: true, cancelable: true, view: window
-                    });
-                    Object.defineProperty(eDown, 'keyCode', { get: () => keyCode });
-                    Object.defineProperty(eDown, 'which', { get: () => keyCode });
-                    Object.defineProperty(eDown, 'charCode', { get: () => 0 });
-                    t.dispatchEvent(eDown);
-
-                    // KeyPress
-                    let ePress = new KeyboardEvent('keypress', {
-                        key: 'h', code: 'KeyH', keyCode: 0, which: charCode,
-                        bubbles: true, cancelable: true, view: window
-                    });
-                    Object.defineProperty(ePress, 'keyCode', { get: () => 0 });
-                    Object.defineProperty(ePress, 'charCode', { get: () => charCode });
-                    Object.defineProperty(ePress, 'which', { get: () => charCode });
-                    t.dispatchEvent(ePress);
-                } catch(err) { log("Send H Error: " + err.message, "red"); }
-            });
+        const eventConfig = {
+            key: keyChar, 
+            code: 'Key' + keyChar.toUpperCase(),
+            keyCode: keyCode, 
+            which: keyCode,
+            bubbles: true, cancelable: true, view: window
+        };
+        
+        const t = document.activeElement || document.body;
+        try {
+            t.dispatchEvent(new KeyboardEvent('keydown', eventConfig));
+            t.dispatchEvent(new KeyboardEvent('keyup', eventConfig));
+            log(`--> 发送成功，目标: ${t.tagName}`);
+        } catch(e) {
+            log(`--> 发送报错: ${e.message}`);
         }
     }
 
     // ==========================================
-    // 6. 核心逻辑
+    // --- 3. 核心逻辑 (带 Log) ---
     // ==========================================
     let clickCount = 0;
     let actionTimer = null;
@@ -165,56 +124,43 @@
     let lastTarget = null; 
 
     const WAIT_FOR_NEXT_CLICK = 1000; 
-    const COOL_DOWN = 2000;           
+    const COOL_DOWN = 2000;            
     const EVENT_DEBOUNCE = 50;        
 
     function globalHandler(e) {
         const target = e.target;
         if (!target || (target.nodeName !== 'VIDEO' && target.nodeName !== 'AUDIO')) return;
 
-        if (target.ended) return; 
-        if (target.seeking) return;
-        if (e.type !== 'play' && e.type !== 'pause') return;
-
-        const now = Date.now();
-        if (now - lastEventTime < EVENT_DEBOUNCE) return;
-        lastEventTime = now;
+        // --- Log 原始事件 ---
+        const eventInfo = `Event: ${e.type} | Seeking: ${target.seeking}`;
         
-        if (now - lastTriggerTime < COOL_DOWN) {
-            log("冷却中...", "gray");
-            clickCount = 0; 
+        // 1. 播放结束检测
+        if (target.ended) {
+            log(`${eventInfo} -> 忽略 (Ended)`);
             return;
         }
 
-        if (lastTarget && lastTarget !== target) {
-            clickCount = 0;
-            if (actionTimer) clearTimeout(actionTimer);
+        // 2. 寻找进度检测
+        if (target.seeking) {
+            log(`${eventInfo} -> 忽略 (Seeking)`);
+            return;
         }
-        lastTarget = target; 
-        if (actionTimer) clearTimeout(actionTimer);
+        
+        // 过滤非 play/pause
+        if (e.type !== 'play' && e.type !== 'pause') return;
 
-        clickCount++;
-        showCounter(clickCount); // 显示大数字
-        log(`⚡ 计数: ${clickCount}`, "#0ff");
+        const now = Date.now();
+        const diff = now - lastEventTime;
 
-        if (clickCount >= 3) {
-            log("✅ 触发三连击 H", "#0f0");
-            triggerKey('h', target);
-            clickCount = 0;
-            lastTriggerTime = now; 
-        } else {
-            actionTimer = setTimeout(() => {
-                if (clickCount === 2) {
-                    log("✅ 触发双击 S", "#0f0");
-                    triggerKey('s', target);
-                    lastTriggerTime = Date.now();
-                }
-                clickCount = 0; 
-            }, WAIT_FOR_NEXT_CLICK);
+        // 0. 防抖
+        if (diff < EVENT_DEBOUNCE) {
+            log(`${eventInfo} -> 忽略 (防抖 ${diff}ms < ${EVENT_DEBOUNCE})`);
+            return;
         }
-    }
-
-    window.addEventListener('play', globalHandler, true);
-    window.addEventListener('pause', globalHandler, true);
-
-})();
+        lastEventTime = now;
+        
+        // 1. 冷却期
+        const coolDiff = now - lastTriggerTime;
+        if (coolDiff < COOL_DOWN) {
+            clickCount = 0; 
+            log(`${
