@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         S键映射 (Firefox强力兼容版)
+// @name         S键映射 (Firefox终极模拟版)
 // @namespace    http://tampermonkey.net/
-// @version      35.0
-// @description  1秒宽容度；修复Firefox三击H无效问题(强制写入keyCode)；保留防误触/防拖拽
+// @version      36.0
+// @description  1秒宽容度；修复Firefox H键无效问题(补全keypress事件)；保留防误触/防拖拽
 // @author       Gemini Helper
 // @match        *://*/*
 // @grant        none
@@ -47,49 +47,63 @@
         }, 500);
     }
 
-    // --- 2. 键盘发射器 (Firefox 增强版) ---
+    // --- 2. 键盘发射器 (V36 终极版) ---
     function triggerKey(keyName) {
-        let keyChar, keyCode;
-        
-        if (keyName === 's') {
-            keyChar = 's'; keyCode = 83;
-        } else if (keyName === 'h') {
-            keyChar = 'h'; keyCode = 72;
-            showCounter("H", "#3388ff");
-        }
+        let keyChar = keyName.toLowerCase();
+        let keyCode = keyName.toUpperCase().charCodeAt(0);
 
-        const eventConfig = {
-            key: keyChar, 
-            code: 'Key' + keyChar.toUpperCase(),
-            keyCode: keyCode, 
-            which: keyCode,
-            bubbles: true, cancelable: true, view: window
-        };
+        // UI 提示
+        if (keyName === 'h') showCounter("H", "#3388ff");
         
-        const targets = [document.activeElement, document.body, document.documentElement];
-        
+        // 目标列表：增加 window，因为有些网站事件监听在 window 上
+        const targets = [document.activeElement, document.body, document.documentElement, window];
+
         targets.forEach(t => {
-            if(!t) return;
-            
-            // 分别触发 keydown 和 keyup
-            ['keydown', 'keyup'].forEach(type => {
+            if (!t) return;
+
+            // 模拟完整的按键生命周期：按下 -> 按住(输入字符) -> 抬起
+            // 很多网站 H 键需要 keypress 才能生效
+            ['keydown', 'keypress', 'keyup'].forEach(type => {
                 try {
-                    let evt = new KeyboardEvent(type, eventConfig);
+                    let eventInit = {
+                        key: keyChar,
+                        code: 'Key' + keyChar.toUpperCase(),
+                        keyCode: keyCode, // 默认值
+                        which: keyCode,
+                        bubbles: true, 
+                        cancelable: true, 
+                        view: window
+                    };
+
+                    let evt = new KeyboardEvent(type, eventInit);
+
+                    // 【核心修复】针对 Firefox 严格区分 keyCode 和 charCode
+                    // keydown/keyup: keyCode 有值, charCode 为 0
+                    // keypress: keyCode 通常为 0, charCode 有值 (ASCII码)
                     
-                    // 【关键修复】针对 Firefox 强制改写 keyCode
-                    // Firefox 默认会把 keyCode 设为 0，必须用这种方式覆盖
-                    Object.defineProperty(evt, 'keyCode', { get: () => keyCode });
-                    Object.defineProperty(evt, 'which', { get: () => keyCode });
+                    const isPress = (type === 'keypress');
+
+                    Object.defineProperty(evt, 'keyCode', { 
+                        get: () => isPress ? 0 : keyCode 
+                    });
+                    
+                    Object.defineProperty(evt, 'charCode', { 
+                        get: () => isPress ? keyCode : 0 
+                    });
+                    
+                    Object.defineProperty(evt, 'which', { 
+                        get: () => keyCode // which 比较通用，一直保持有值
+                    });
 
                     t.dispatchEvent(evt);
-                } catch(e) {
-                    console.error("Key trigger failed:", e);
+                } catch (e) {
+                    console.error("Trigger Error:", e);
                 }
             });
         });
     }
 
-    // --- 3. 核心逻辑 (V34 防误触逻辑保持不变) ---
+    // --- 3. 核心逻辑 (保持不变) ---
     let clickCount = 0;
     let actionTimer = null;
     let lastEventTime = 0;   
@@ -149,13 +163,13 @@
         if (clickCount === 3) showCounter("3", "rgba(255,255,255,1.0)");
 
         if (clickCount >= 3) {
-            triggerKey('h');
+            triggerKey('h'); // 立即触发 H
             clickCount = 0;
             lastTriggerTime = now; 
         } else {
             actionTimer = setTimeout(() => {
                 if (clickCount === 2) {
-                    triggerKey('s');
+                    triggerKey('s'); // 倒计时结束触发 S
                     lastTriggerTime = Date.now();
                 }
                 clickCount = 0; 
