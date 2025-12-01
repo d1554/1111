@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         S键映射 (Firefox时机修复版)
+// @name         S键映射 (V39-暴力清场防吞版)
 // @namespace    http://tampermonkey.net/
-// @version      37.0
-// @description  1秒宽容度；修复Firefox三连击H因事件冲突被吞掉的问题(异步触发)
+// @version      39.0
+// @description  强制清除Firefox三击产生的文本选区；H键连发3次确保穿透；保留防误触
 // @author       Gemini Helper
 // @match        *://*/*
 // @grant        none
@@ -47,55 +47,63 @@
         }, 500);
     }
 
-    // --- 2. 键盘发射器 (异步增强版) ---
-    function triggerKey(keyName) {
-        // 将发射逻辑包裹在 setTimeout 中，强制推迟到下一个事件循环
-        // 这是解决 Firefox "吞事件" 的关键
+    // --- 2. 键盘发射器 (暴力清场 + 连发) ---
+    function triggerKey(keyName, originalTarget) {
+        // 稍微延迟一丢丢，等Firefox把“全选”这件蠢事做完
         setTimeout(() => {
-            let keyChar = keyName.toLowerCase();
-            let keyCode = keyName.toUpperCase().charCodeAt(0);
+            
+            // === 【第一步：暴力清场】 ===
+            // 1. 清除三击产生的高亮选区 (这是Firefox吞事件的罪魁祸首)
+            if (window.getSelection) {
+                window.getSelection().removeAllRanges();
+            }
+            // 2. 强制当前焦点元素失焦 (Reset)
+            if (document.activeElement) {
+                document.activeElement.blur();
+            }
+            // 3. 重新把焦点聚焦回视频 (如果有)，或者聚焦到body
+            if (originalTarget && originalTarget.focus) {
+                originalTarget.focus();
+            } else {
+                document.body.focus();
+            }
 
+            // === 【第二步：按键构造】 ===
+            let keyChar = keyName;
+            let keyCode = (keyName === 's') ? 83 : 72;
+            
             if (keyName === 'h') showCounter("H", "#3388ff");
-            
-            // 扩大打击面，确保 activeElement 能收到
-            const targets = [document.activeElement || document.body, document.body, document.documentElement, window];
-            
-            // 去重，防止对同一个元素发两次
-            const uniqueTargets = [...new Set(targets)]; 
 
-            uniqueTargets.forEach(t => {
-                if (!t) return;
+            const eventConfig = {
+                key: keyChar, 
+                code: 'Key' + keyChar.toUpperCase(),
+                keyCode: keyCode, 
+                which: keyCode,
+                charCode: keyCode, // 为keypress补全
+                bubbles: true, cancelable: true, view: window
+            };
 
-                ['keydown', 'keypress', 'keyup'].forEach(type => {
-                    try {
-                        let eventInit = {
-                            key: keyChar,
-                            code: 'Key' + keyChar.toUpperCase(),
-                            keyCode: keyCode,
-                            which: keyCode,
-                            bubbles: true, 
-                            cancelable: true,
-                            composed: true, // 现代浏览器事件穿透 Shadow DOM
-                            view: window
-                        };
+            // === 【第三步：地毯式轰炸】 ===
+            // 定义一个发送函数
+            const fire = () => {
+                // 优先发给 originalTarget (视频本身)，不行就发给 document
+                const t = originalTarget || document.body;
+                
+                // keydown -> keypress -> keyup
+                t.dispatchEvent(new KeyboardEvent('keydown', eventConfig));
+                t.dispatchEvent(new KeyboardEvent('keypress', eventConfig)); // 很多H键绑定在这里
+                t.dispatchEvent(new KeyboardEvent('keyup', eventConfig));
+            };
 
-                        let evt = new KeyboardEvent(type, eventInit);
-                        const isPress = (type === 'keypress');
+            // 连发3次，间隔20ms，确保有一发能钻过浏览器的事件缝隙
+            fire(); 
+            setTimeout(fire, 20);
+            setTimeout(fire, 40);
 
-                        Object.defineProperty(evt, 'keyCode', { get: () => isPress ? 0 : keyCode });
-                        Object.defineProperty(evt, 'charCode', { get: () => isPress ? keyCode : 0 });
-                        Object.defineProperty(evt, 'which', { get: () => keyCode });
-
-                        t.dispatchEvent(evt);
-                    } catch (e) {
-                        console.error("Key trigger failed:", e);
-                    }
-                });
-            });
-        }, 50); // 延迟 50ms 发射，避开 play/pause 的处理高峰
+        }, 150); // 延迟150ms开始执行，避开三击物理高峰
     }
 
-    // --- 3. 核心逻辑 (保持不变) ---
+    // --- 3. 核心逻辑 (保持防误触) ---
     let clickCount = 0;
     let actionTimer = null;
     let lastEventTime = 0;   
@@ -148,14 +156,14 @@
         if (clickCount === 3) showCounter("3", "rgba(255,255,255,1.0)");
 
         if (clickCount >= 3) {
-            // 这里调用 triggerKey，内部会延迟 50ms 执行
-            triggerKey('h');
+            // 将 target 传进去，方便我们重新聚焦
+            triggerKey('h', target); 
             clickCount = 0;
             lastTriggerTime = now; 
         } else {
             actionTimer = setTimeout(() => {
                 if (clickCount === 2) {
-                    triggerKey('s');
+                    triggerKey('s', target);
                     lastTriggerTime = Date.now();
                 }
                 clickCount = 0; 
