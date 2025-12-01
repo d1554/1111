@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         S键映射 (V52 深度侦探版)
+// @name         S键映射 (V53 安全挂载诊断版)
 // @namespace    http://tampermonkey.net/
-// @version      52.0
-// @description  带有即时日志记录系统，用于诊断安卓Firefox下按键失效的根本原因
+// @version      53.0
+// @description  修复调试窗口不显示的问题；强制等待页面加载完成后再挂载UI；顶部显示日志
 // @author       Gemini Helper
 // @match        *://*/*
 // @grant        none
@@ -12,78 +12,102 @@
 (function() {
     'use strict';
 
-    // ==========================================
-    // 1. 简易屏幕调试控制台 (Debug Console)
-    // ==========================================
+    // --- 全局变量 ---
     let debugBox = null;
-    function initDebug() {
-        if (!document.body) return requestAnimationFrame(initDebug);
-        debugBox = document.createElement('div');
-        debugBox.style.cssText = `
-            position: fixed; bottom: 0; left: 0; width: 100%; height: 40vh;
-            background: rgba(0,0,0,0.9); color: #0f0; font-size: 12px; line-height: 1.4;
-            overflow-y: auto; z-index: 2147483647; padding: 10px;
-            border-top: 2px solid #fff; font-family: monospace; pointer-events: none;
-        `;
-        document.body.appendChild(debugBox);
-        log(">>> 侦探系统 V52 已启动", "#fff");
-        log(">>> 请尝试：双击(S) 或 三击(H)", "#fff");
-        log("----------------------------------", "#888");
-    }
-    
-    function log(msg, color = '#0f0') {
-        if (!debugBox) return;
-        const line = document.createElement('div');
-        const time = new Date().toLocaleTimeString().split(' ')[0] + '.' + new Date().getMilliseconds();
-        line.innerHTML = `<span style="color:#888">[${time}]</span> <span style="color:${color}">${msg}</span>`;
-        debugBox.appendChild(line);
-        debugBox.scrollTop = debugBox.scrollHeight;
-    }
-    initDebug();
+    let counterBox = null;
+    let hasLoaded = false;
 
     // ==========================================
-    // 2. 环境监听 (验证按键是否真的发出去了)
+    // 1. 安全挂载系统 (Safe Mount System)
     // ==========================================
-    // 监听 window 上的按键，看看脚本发的键是不是被浏览器吞了
+    function tryMountUI() {
+        if (hasLoaded) return; // 防止重复挂载
+        if (!document.body) return; // 身体没长好，下次再来
+
+        hasLoaded = true;
+
+        // --- A. 创建调试窗口 (顶部) ---
+        debugBox = document.createElement('div');
+        debugBox.style.cssText = `
+            position: fixed; top: 0; left: 0; width: 100%; height: 30vh;
+            background: rgba(0,0,0,0.95); color: #0f0; font-size: 12px; line-height: 1.2;
+            overflow-y: auto; z-index: 2147483647; padding: 5px;
+            border-bottom: 2px solid #fff; font-family: monospace; pointer-events: none;
+            word-break: break-all;
+        `;
+        document.body.appendChild(debugBox);
+        log(">>> V53 诊断系统挂载成功", "#fff");
+        log(">>> 窗口位于顶部，请三连击测试", "#fff");
+
+        // --- B. 创建大计数器 (中央) ---
+        counterBox = document.createElement('div');
+        counterBox.style.cssText = `
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            font-size: 80px; font-weight: 900; color: rgba(255, 255, 255, 0.9);
+            text-shadow: 0 0 10px #000; z-index: 2147483646; pointer-events: none;
+            display: none; transition: opacity 0.1s;
+        `;
+        document.body.appendChild(counterBox);
+    }
+
+    // 启动定时器，每100ms检查一次，直到挂载成功
+    const mountTimer = setInterval(() => {
+        if (document.body) {
+            tryMountUI();
+            clearInterval(mountTimer);
+        }
+    }, 100);
+
+    // ==========================================
+    // 2. 日志与UI工具
+    // ==========================================
+    function log(msg, color = '#0f0') {
+        if (!debugBox) return; // 如果UI还没挂载，日志先丢弃(或存队列，这里简化处理)
+        const line = document.createElement('div');
+        const time = new Date().toLocaleTimeString().split(' ')[0] + '.' + new Date().getMilliseconds();
+        line.innerHTML = `<span style="color:#666">[${time}]</span> <span style="color:${color}">${msg}</span>`;
+        // 插入到最前面，方便手机看最新消息
+        debugBox.insertBefore(line, debugBox.firstChild);
+    }
+
+    let counterHideTimer;
+    function showCounter(num, color = '#fff') {
+        if (!counterBox) return;
+        counterBox.innerText = num;
+        counterBox.style.color = color;
+        counterBox.style.display = 'block';
+        clearTimeout(counterHideTimer);
+        counterHideTimer = setTimeout(() => { counterBox.style.display = 'none'; }, 500);
+    }
+
+    // ==========================================
+    // 3. 键盘事件监听 (验证系统是否收到)
+    // ==========================================
     window.addEventListener('keydown', (e) => {
-        // 区分是人按的还是脚本发的 (isTrusted)
-        const src = e.isTrusted ? "【物理按键】" : "【脚本模拟】";
-        const info = `Key:${e.key} | Code:${e.code} | keyCode:${e.keyCode} | charCode:${e.charCode}`;
-        log(`👂 系统监听到 ${src}: ${info}`, "#ff00ff");
+        const src = e.isTrusted ? "物理" : "脚本";
+        log(`👂 系统收到[${src}] Key:${e.key} Code:${e.keyCode}`, "#ff00ff");
     }, true);
 
     // ==========================================
-    // 3. CSS 防手势 (排除干扰)
+    // 4. CSS 防手势
     // ==========================================
-    function injectAntiGestureStyle() {
-        const css = `
-            video, audio, button, .video-wrapper, .control-bar {
-                touch-action: manipulation !important; 
-            }
-        `;
+    function injectCSS() {
+        const css = `video, audio, button, .video-wrapper { touch-action: manipulation !important; }`;
         const style = document.createElement('style');
         style.textContent = css;
         (document.head || document.documentElement).appendChild(style);
-        log(">>> CSS防手势装甲已注入", "#888");
     }
-    injectAntiGestureStyle();
+    injectCSS();
 
     // ==========================================
-    // 4. 键盘发射器 (V51 混合版逻辑)
+    // 5. 按键发射器 (V51 混合版)
     // ==========================================
     function triggerKey(keyName, originalTarget) {
-        log(`🚀 准备发射按键: ${keyName.toUpperCase()}`, "orange");
+        log(`🚀 发射按键: ${keyName.toUpperCase()}`, "orange");
         
-        // 打印当前的焦点元素，看看是不是焦点跑了
-        const active = document.activeElement;
-        const activeName = active ? (active.tagName + (active.className ? "."+active.className : "")) : "null";
-        log(`👀 当前焦点在: ${activeName}`, "#ccc");
-
-        // 目标：优先发给视频，没有就发给body
         const targets = [originalTarget || document.body, document];
-
-        if (keyName === 's') {
-            // S键：V34 原始逻辑
+        
+        if (keyName === 's') { // S键：原始逻辑
             const keyCode = 83;
             targets.forEach(t => {
                 if(!t) return;
@@ -93,56 +117,104 @@
                         bubbles: true, cancelable: true, view: window
                     });
                     t.dispatchEvent(e);
-                    // 补全 keyup
-                    let eUp = new KeyboardEvent('keyup', {
+                    t.dispatchEvent(new KeyboardEvent('keyup', {
                         key: 's', code: 'KeyS', keyCode: keyCode, which: keyCode,
                         bubbles: true, cancelable: true, view: window
-                    });
-                    t.dispatchEvent(eUp);
-                    log(`   -> S键已发送给 <${t.tagName}>`);
-                } catch(e) { log(`ERROR: ${e.message}`, "red"); }
+                    }));
+                } catch(err) { log("Send Error: " + err.message, "red"); }
             });
         }
 
-        if (keyName === 'h') {
-            // H键：Firefox 增强补丁
-            const keyCode = 72;  // H
-            const charCode = 104; // h
-            
+        if (keyName === 'h') { // H键：Firefox 补丁
+            const keyCode = 72;
+            const charCode = 104;
             targets.forEach(t => {
                 if(!t) return;
-                // KeyDown
                 try {
-                    let e = new KeyboardEvent('keydown', {
+                    // KeyDown
+                    let eDown = new KeyboardEvent('keydown', {
                         key: 'h', code: 'KeyH', keyCode: keyCode, which: keyCode,
                         bubbles: true, cancelable: true, view: window
                     });
-                    Object.defineProperty(e, 'keyCode', { get: () => keyCode });
-                    Object.defineProperty(e, 'which', { get: () => keyCode });
-                    Object.defineProperty(e, 'charCode', { get: () => 0 });
-                    t.dispatchEvent(e);
-                } catch(err) {}
+                    Object.defineProperty(eDown, 'keyCode', { get: () => keyCode });
+                    Object.defineProperty(eDown, 'which', { get: () => keyCode });
+                    Object.defineProperty(eDown, 'charCode', { get: () => 0 });
+                    t.dispatchEvent(eDown);
 
-                // KeyPress
-                try {
-                    let e = new KeyboardEvent('keypress', {
+                    // KeyPress
+                    let ePress = new KeyboardEvent('keypress', {
                         key: 'h', code: 'KeyH', keyCode: 0, which: charCode,
                         bubbles: true, cancelable: true, view: window
                     });
-                    Object.defineProperty(e, 'keyCode', { get: () => 0 });
-                    Object.defineProperty(e, 'charCode', { get: () => charCode });
-                    Object.defineProperty(e, 'which', { get: () => charCode });
-                    t.dispatchEvent(e);
-                    log(`   -> H键(Press)已发送给 <${t.tagName}>`);
-                } catch(err) {}
+                    Object.defineProperty(ePress, 'keyCode', { get: () => 0 });
+                    Object.defineProperty(ePress, 'charCode', { get: () => charCode });
+                    Object.defineProperty(ePress, 'which', { get: () => charCode });
+                    t.dispatchEvent(ePress);
+                } catch(err) { log("Send H Error: " + err.message, "red"); }
             });
         }
     }
 
     // ==========================================
-    // 5. 核心逻辑 (V34 Play/Pause 监听)
+    // 6. 核心逻辑
     // ==========================================
     let clickCount = 0;
     let actionTimer = null;
     let lastEventTime = 0;   
-    let lastTriggerTime = 0;
+    let lastTriggerTime = 0; 
+    let lastTarget = null; 
+
+    const WAIT_FOR_NEXT_CLICK = 1000; 
+    const COOL_DOWN = 2000;           
+    const EVENT_DEBOUNCE = 50;        
+
+    function globalHandler(e) {
+        const target = e.target;
+        if (!target || (target.nodeName !== 'VIDEO' && target.nodeName !== 'AUDIO')) return;
+
+        if (target.ended) return; 
+        if (target.seeking) return;
+        if (e.type !== 'play' && e.type !== 'pause') return;
+
+        const now = Date.now();
+        if (now - lastEventTime < EVENT_DEBOUNCE) return;
+        lastEventTime = now;
+        
+        if (now - lastTriggerTime < COOL_DOWN) {
+            log("冷却中...", "gray");
+            clickCount = 0; 
+            return;
+        }
+
+        if (lastTarget && lastTarget !== target) {
+            clickCount = 0;
+            if (actionTimer) clearTimeout(actionTimer);
+        }
+        lastTarget = target; 
+        if (actionTimer) clearTimeout(actionTimer);
+
+        clickCount++;
+        showCounter(clickCount); // 显示大数字
+        log(`⚡ 计数: ${clickCount}`, "#0ff");
+
+        if (clickCount >= 3) {
+            log("✅ 触发三连击 H", "#0f0");
+            triggerKey('h', target);
+            clickCount = 0;
+            lastTriggerTime = now; 
+        } else {
+            actionTimer = setTimeout(() => {
+                if (clickCount === 2) {
+                    log("✅ 触发双击 S", "#0f0");
+                    triggerKey('s', target);
+                    lastTriggerTime = Date.now();
+                }
+                clickCount = 0; 
+            }, WAIT_FOR_NEXT_CLICK);
+        }
+    }
+
+    window.addEventListener('play', globalHandler, true);
+    window.addEventListener('pause', globalHandler, true);
+
+})();
