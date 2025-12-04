@@ -195,34 +195,49 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
         span.innerHTML = '<button id="btnPlay" onclick="player.togglePlay();" type="button" class="relative -ml-px inline-flex items-center rounded-md bg-transparent pl-2 pr-2 py-2 font-medium text-white ring-1 ring-inset ring-white hover:bg-primary focus:z-10">' + videoSettings.htmlPlay + '</button>'
         bar.insertBefore(span, bar.lastElementChild)
 
-// 【延迟 5 秒开启声音测试版】
-        // 1. 先强制静音，确保能骗过浏览器开始播放画面
+// ==========================================
+        // 【Mac/iOS 强力自动播放修复版 - 防卡死逻辑】
+        // ==========================================
+        
+        // 1. 起步：必须先静音，这是浏览器的底线，否则根本不让动
         player.muted = true;
         
-        // 2. 执行播放
-        var playPromise = player.play();
+        // 2. 发车：尝试播放
+        var startPlay = player.play();
 
-        if (playPromise !== undefined) {
-            playPromise.then(_ => {
-                console.log("✅ 视频已静音启动，将在 5 秒后尝试开启声音...");
-                
-                // 3. 延迟 5000 毫秒（5秒）后执行开启声音
+        // 3. 偷塔：播放成功后，尝试悄悄开启声音
+        if (startPlay !== undefined) {
+            startPlay.then(() => {
+                console.log("✅ 视频已启动（静音状态）");
+
+                // 延迟 2 秒尝试开启声音
                 setTimeout(() => {
-                    console.log("🔊 正在尝试开启声音...");
+                    console.log("🔊 尝试开启声音...");
                     player.muted = false;
-                    player.volume = 1.0; 
+                }, 2000);
 
-                    // 4. 双重保险：如果开启声音的一瞬间导致视频被暂停，立即尝试再次“踢”它一下
-                    if (player.paused) {
-                        console.log("⚠️ 开启声音导致暂停，尝试强制恢复播放...");
-                        player.play();
-                    }
-                }, 5000);
-                
             }).catch(error => {
-                console.error("❌ 播放启动失败:", error);
+                console.error("❌ 启动失败，尝试暴力强启:", error);
+                player.muted = true;
+                player.play(); // 失败后再次尝试静音播放
             });
         }
+
+        // 4. 【关键防御】如果开启声音导致视频被浏览器“杀掉”（自动暂停）
+        // 立即监听到暂停事件，并强制重启
+        var antiLockFunc = () => {
+            if (!player.muted && player.paused) {
+                console.log("⚠️ 检测到浏览器因声音拦截了播放，正在恢复静音播放...");
+                player.muted = true; // 认怂：恢复静音
+                player.play();       // 重启：继续播放
+                // 移除监听，防止死循环，下次手动点声音即可
+                player.removeEventListener('pause', antiLockFunc);
+            }
+        };
+        player.addEventListener('pause', antiLockFunc);
+        // ==========================================
+
+        
         
 
 
