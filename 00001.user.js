@@ -186,17 +186,15 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
         // 【1. 全平台无死角解除静音】
         // ==========================================
         if (videoSettings.autoMutePlay) {
-            // 强制静音启动
             player.muted = true;
             player.play().catch(e => console.error("静音启动失败:", e));
 
-            // 监听所有交互以解除静音
             var aggressiveUnmute = (e) => {
                 if (!player.muted) return;
                 console.log(`👆 检测到交互 (${e.type}) -> 解除静音`);
                 player.muted = false;
                 player.volume = 1.0;
-                if (player.muted) player.muted = false; // 双重保险
+                if (player.muted) player.muted = false; 
             };
             const eventTypes = ['click', 'mousedown', 'mouseup', 'mousemove', 'wheel', 'touchstart', 'touchend', 'touchmove', 'pointerdown', 'keydown', 'scroll'];
             eventTypes.forEach(evt => {
@@ -206,17 +204,19 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
         }
 
         // ==========================================
-        // 【2. 点击画面 播放/暂停 (修复点击无效问题)】
+        // 【2. 点击画面 播放/暂停 (iPad/PC 双模增强)】
         // ==========================================
-        video.addEventListener('click', (e) => {
-            // 如果点击的是下方的控制按钮，或者是链接，则忽略
-            // 防止点击“播放”按钮时触发两次（导致播放又立马暂停）
-            if (e.target.closest('button') || e.target.closest('a') || e.target.closest('.plyr__controls')) {
+        
+        // 核心逻辑：切换播放状态
+        const togglePlayLogic = (e) => {
+            // 忽略控制条、按钮、链接上的点击
+            if (e.target.closest('button') || e.target.closest('a') || e.target.closest('.plyr__controls') || e.target.closest('input')) {
                 return;
             }
 
-            console.log("👆 点击了视频区域 -> 切换播放状态");
-            // 阻止冒泡，防止被其他广告层捕获
+            console.log(`👆 视频区域交互 (${e.type}) -> 切换播放状态`);
+            // 阻止冒泡和默认行为（防止 iOS 产生“鬼触”点击）
+            e.preventDefault(); 
             e.stopPropagation(); 
             
             if (player.paused) {
@@ -224,7 +224,23 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
             } else {
                 player.pause();
             }
-        });
+        };
+
+        // --- PC端监听 click ---
+        video.addEventListener('click', togglePlayLogic);
+
+        // --- iPad/iOS端监听 touchend ---
+        // 必须额外处理 touchmove，防止“滑动屏幕”被误判为“点击”
+        let isScrolling = false;
+        video.addEventListener('touchstart', () => { isScrolling = false; }, {passive: true});
+        video.addEventListener('touchmove', () => { isScrolling = true; }, {passive: true});
+        video.addEventListener('touchend', (e) => {
+            if (!isScrolling) {
+                togglePlayLogic(e);
+            }
+        }, {passive: false}); // passive: false 允许 preventDefault
+
+        // ==========================================
 
         // 【视频控制条】播放/暂停时，变化播放按钮形态
         player.onplay = () => { document.querySelector('#btnPlay').innerHTML = videoSettings.htmlPause }
