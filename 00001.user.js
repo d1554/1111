@@ -50,7 +50,7 @@
 // @description:eo    Forigu reklamojn |
 // @description:es    Eliminar los anuncios |
 // @description:fi    Poista mainokset |
-// @description       Remove ads | Background play | Auto play | Custom fast-forward time | Full title | More
+// @description        Remove ads | Background play | Auto play | Custom fast-forward time | Full title | More
 // @description:fr    Supprimez les publicités |
 // @description:fr-CA Supprimez les publicités |
 // @description:he    הסר את המודעות |
@@ -107,24 +107,7 @@
 // @downloadURL https://update.greasyfork.org/scripts/529125/MissAV%20Enhanced%20Assistant.user.js
 // @updateURL https://update.greasyfork.org/scripts/529125/MissAV%20Enhanced%20Assistant.meta.js
 // ==/UserScript==
-/**
- * File: missav-enhancer.user.js
- * Project: UserScripts
- * File Created: 2025/03/07 21:14:34
- * Author: 人民的勤务员@ChinaGodMan (china.qinwuyuan@gmail.com)
- * -----
- * Last Modified: 2025/04/27,Sunday 13:45:35
- * Modified By: 人民的勤务员@ChinaGodMan (china.qinwuyuan@gmail.com)
- * -----
- * License: MIT License
- * Copyright © 2024 - 2025 ChinaGodMan,Inc
- * -----
- * 脚本来自：
- * https://greasyfork.org/scripts/493932 MISSAV视频控制条增强 @iSwfe
- * https://greasyfork.org/scripts/488770/  missav修改页面 @mrhydra
- * https://greasyfork.org/scripts/499213 missav永远播放+不弹广告 @track no
- * https://greasyfork.org/scripts/470539 MissAV 迷你加強包 @DonkeyBear
-*/
+
 const url = window.location.href
 if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
     window.location.href = url.replace('missav.com', 'missav.live').replace('thisav.com', 'missav.live')
@@ -148,7 +131,7 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
         maxDuration: 60 * minute,
         // 后台禁止自动暂停模式
         autoPauseDisable: 1, // 0:默认模式(浏览器同一组标签,播放页面切换到另外标签暂停播放), 1:禁止所有暂停播放,切换到同一组标签不暂停播放
-        // 自动静音播放
+        // 自动静音播放 (必须为 true 才能保证 Mac/iOS 上先启动)
         autoMutePlay: true
     };
 
@@ -195,51 +178,47 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
         span.innerHTML = '<button id="btnPlay" onclick="player.togglePlay();" type="button" class="relative -ml-px inline-flex items-center rounded-md bg-transparent pl-2 pr-2 py-2 font-medium text-white ring-1 ring-inset ring-white hover:bg-primary focus:z-10">' + videoSettings.htmlPlay + '</button>'
         bar.insertBefore(span, bar.lastElementChild)
 
-// ==========================================
+        // ==========================================
         // 【Mac/iOS 强力自动播放修复版 - 防卡死逻辑】
         // ==========================================
-        
-        // 1. 起步：必须先静音，这是浏览器的底线，否则根本不让动
-        player.muted = true;
-        
-        // 2. 发车：尝试播放
-        var startPlay = player.play();
+        if (videoSettings.autoMutePlay) {
+            // 1. 起步：必须先静音，这是浏览器的底线
+            player.muted = true;
+            
+            // 2. 发车：尝试播放
+            var startPlay = player.play();
 
-        // 3. 偷塔：播放成功后，尝试悄悄开启声音
-        if (startPlay !== undefined) {
-            startPlay.then(() => {
-                console.log("✅ 视频已启动（静音状态）");
+            // 3. 偷塔：播放成功后，尝试悄悄开启声音
+            if (startPlay !== undefined) {
+                startPlay.then(() => {
+                    console.log("✅ 视频已启动（静音状态）");
 
-                // 延迟 2 秒尝试开启声音
-                setTimeout(() => {
-                    console.log("🔊 尝试开启声音...");
-                    player.muted = false;
-                }, 2000);
+                    // 延迟 2 秒尝试开启声音
+                    setTimeout(() => {
+                        console.log("🔊 尝试开启声音...");
+                        player.muted = false;
+                    }, 2000);
 
-            }).catch(error => {
-                console.error("❌ 启动失败，尝试暴力强启:", error);
-                player.muted = true;
-                player.play(); // 失败后再次尝试静音播放
-            });
-        }
-
-        // 4. 【关键防御】如果开启声音导致视频被浏览器“杀掉”（自动暂停）
-        // 立即监听到暂停事件，并强制重启
-        var antiLockFunc = () => {
-            if (!player.muted && player.paused) {
-                console.log("⚠️ 检测到浏览器因声音拦截了播放，正在恢复静音播放...");
-                player.muted = true; // 认怂：恢复静音
-                player.play();       // 重启：继续播放
-                // 移除监听，防止死循环，下次手动点声音即可
-                player.removeEventListener('pause', antiLockFunc);
+                }).catch(error => {
+                    console.error("❌ 启动失败，尝试重试:", error);
+                });
             }
-        };
-        player.addEventListener('pause', antiLockFunc);
+
+            // 4. 【关键防御】如果开启声音导致视频被浏览器“杀掉”（自动暂停）
+            // 立即监听到暂停事件，并强制重启
+            var antiLockFunc = () => {
+                // 如果是非静音且暂停了，说明被拦截了
+                if (!player.muted && player.paused) {
+                    console.log("⚠️ 检测到浏览器因声音拦截了播放，正在恢复静音播放...");
+                    player.muted = true; // 认怂：恢复静音
+                    player.play();       // 重启：继续播放
+                    // 移除监听，防止死循环
+                    player.removeEventListener('pause', antiLockFunc);
+                }
+            };
+            player.addEventListener('pause', antiLockFunc);
+        }
         // ==========================================
-
-        
-        
-
 
         // 【视频控制条】播放/暂停时，变化播放按钮形态
         player.onplay = () => { document.querySelector('#btnPlay').innerHTML = videoSettings.htmlPause }
