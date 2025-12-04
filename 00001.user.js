@@ -131,7 +131,7 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
         maxDuration: 60 * minute,
         // 后台禁止自动暂停模式
         autoPauseDisable: 1, // 0:默认模式(浏览器同一组标签,播放页面切换到另外标签暂停播放), 1:禁止所有暂停播放,切换到同一组标签不暂停播放
-        // 自动静音播放 (必须为 true 才能保证 Mac/iOS 上先启动)
+        // 自动静音播放 (必须为 true)
         autoMutePlay: true
     };
 
@@ -179,44 +179,34 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
         bar.insertBefore(span, bar.lastElementChild)
 
         // ==========================================
-        // 【Mac/iOS 强力自动播放修复版 - 防卡死逻辑】
+        // 【Mac/iOS 终极修复：感应式有声播放】
         // ==========================================
         if (videoSettings.autoMutePlay) {
-            // 1. 起步：必须先静音，这是浏览器的底线
+            // 1. 强制静音启动（这是底线，保证视频会动）
             player.muted = true;
-            
-            // 2. 发车：尝试播放
-            var startPlay = player.play();
+            player.play().catch(e => console.error("静音启动失败:", e));
 
-            // 3. 偷塔：播放成功后，尝试悄悄开启声音
-            if (startPlay !== undefined) {
-                startPlay.then(() => {
-                    console.log("✅ 视频已启动（静音状态）");
-
-                    // 延迟 2 秒尝试开启声音
-                    setTimeout(() => {
-                        console.log("🔊 尝试开启声音...");
-                        player.muted = false;
-                    }, 2000);
-
-                }).catch(error => {
-                    console.error("❌ 启动失败，尝试重试:", error);
+            // 2. 只有当用户真的动了鼠标或碰了屏幕，才开声音
+            // 这样 100% 不会被浏览器拦截
+            var hasUnmuted = false;
+            var enableSound = () => {
+                if (hasUnmuted) return;
+                
+                console.log("👆 检测到交互，正在开启声音...");
+                player.muted = false;
+                player.volume = 1.0;
+                hasUnmuted = true;
+                
+                // 移除所有监听器，节省资源
+                ['click', 'touchstart', 'mousemove', 'keydown', 'scroll'].forEach(evt => {
+                    document.removeEventListener(evt, enableSound, true);
                 });
-            }
-
-            // 4. 【关键防御】如果开启声音导致视频被浏览器“杀掉”（自动暂停）
-            // 立即监听到暂停事件，并强制重启
-            var antiLockFunc = () => {
-                // 如果是非静音且暂停了，说明被拦截了
-                if (!player.muted && player.paused) {
-                    console.log("⚠️ 检测到浏览器因声音拦截了播放，正在恢复静音播放...");
-                    player.muted = true; // 认怂：恢复静音
-                    player.play();       // 重启：继续播放
-                    // 移除监听，防止死循环
-                    player.removeEventListener('pause', antiLockFunc);
-                }
             };
-            player.addEventListener('pause', antiLockFunc);
+
+            // 监听所有可能的用户行为
+            ['click', 'touchstart', 'mousemove', 'keydown', 'scroll'].forEach(evt => {
+                document.addEventListener(evt, enableSound, { capture: true, once: true });
+            });
         }
         // ==========================================
 
