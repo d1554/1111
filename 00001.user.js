@@ -156,8 +156,6 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
         var video = content.querySelector('div:first-child')
         video.id = 'video'
         video.classList.value = 'relative -mx-4 sm:m-0 mt-1'
-        
-        // 【新增功能】设置鼠标手势为点击状，提示可点击
         video.style.cursor = 'pointer';
 
         // 【视频区域】设备横屏时自动锚点到视频
@@ -204,41 +202,43 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
         }
 
         // ==========================================
-        // 【2. 点击画面 播放/暂停 (iPad/PC 双模增强)】
+        // 【2. 强力修复：单次点击即暂停 (绕过唤醒菜单)】
         // ==========================================
-        
-        // 核心逻辑：切换播放状态
-        const togglePlayLogic = (e) => {
-            // 忽略控制条、按钮、链接上的点击
+        let isScrolling = false;
+        // 监听 touchmove 以区分滑动和点击
+        video.addEventListener('touchmove', () => { isScrolling = true; }, {passive: true});
+        video.addEventListener('touchstart', () => { isScrolling = false; }, {passive: true});
+
+        // 核心：使用 capture: true 在播放器收到事件之前拦截它
+        video.addEventListener('touchend', (e) => {
+            // 如果是在滚动，不处理
+            if (isScrolling) return;
+
+            // 如果点的是按钮、进度条等控件，不处理，交给原生逻辑
             if (e.target.closest('button') || e.target.closest('a') || e.target.closest('.plyr__controls') || e.target.closest('input')) {
                 return;
             }
 
-            console.log(`👆 视频区域交互 (${e.type}) -> 切换播放状态`);
-            // 阻止冒泡和默认行为（防止 iOS 产生“鬼触”点击）
-            e.preventDefault(); 
+            // ⚠️ 关键操作：阻止事件冒泡和默认行为
+            // 这会让播放器本身“不知道”你点击了，从而不会执行“显示菜单”的逻辑
             e.stopPropagation(); 
-            
+            e.stopImmediatePropagation();
+            e.preventDefault();
+
+            console.log("⚡ 拦截到点击，强制切换播放状态");
             if (player.paused) {
                 player.play();
             } else {
                 player.pause();
             }
-        };
+        }, { capture: true, passive: false }); // capture: true 是重点
 
-        // --- PC端监听 click ---
-        video.addEventListener('click', togglePlayLogic);
-
-        // --- iPad/iOS端监听 touchend ---
-        // 必须额外处理 touchmove，防止“滑动屏幕”被误判为“点击”
-        let isScrolling = false;
-        video.addEventListener('touchstart', () => { isScrolling = false; }, {passive: true});
-        video.addEventListener('touchmove', () => { isScrolling = true; }, {passive: true});
-        video.addEventListener('touchend', (e) => {
-            if (!isScrolling) {
-                togglePlayLogic(e);
-            }
-        }, {passive: false}); // passive: false 允许 preventDefault
+        // PC 端点击逻辑 (保持不变)
+        video.addEventListener('click', (e) => {
+            if (e.target.closest('button') || e.target.closest('a') || e.target.closest('.plyr__controls')) return;
+            e.stopPropagation();
+            player.togglePlay();
+        }, { capture: true });
 
         // ==========================================
 
