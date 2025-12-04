@@ -1,14 +1,14 @@
 // ==UserScript==
 // @name              MissAV Enhanced Assistant
 // @name              MissAV Enhancer
-// @name:zh           MissAV 增强小助手 (纯净常显版)
-// @name:zh-CN        MissAV 增强小助手 (纯净常显版)
-// @name:zh-HK        MissAV 增強小助手 (純淨常顯版)
-// @name:zh-TW        MissAV 增強小助手 (純淨常顯版)
-// @description:zh    原生控制栏常显(不自动隐藏) | 去除广告 | 后台播放 | 自动播放 | 完整标题
-// @description:zh-CN 原生控制栏常显(不自动隐藏) | 去除广告 | 后台播放 | 自动播放 | 完整标题
-// @description:zh-HK 原生控制欄常顯(不自動隱藏) | 去除廣告 | 後台播放 | 自動播放 | 完整標題
-// @description:zh-TW 原生控制欄常顯(不自動隱藏) | 去除廣告 | 後台播放 | 自動播放 | 完整標題
+// @name:zh           MissAV 增强小助手 (控制栏下移常显版)
+// @name:zh-CN        MissAV 增强小助手 (控制栏下移常显版)
+// @name:zh-HK        MissAV 增強小助手 (控制欄下移常顯版)
+// @name:zh-TW        MissAV 增強小助手 (控制欄下移常顯版)
+// @description:zh    将原生控制栏移至视频下方显示 | 去除广告 | 后台播放 | 自动播放 | 完整标题
+// @description:zh-CN 将原生控制栏移至视频下方显示 | 去除广告 | 后台播放 | 自动播放 | 完整标题
+// @description:zh-HK 将原生控制栏移至视频下方显示 | 去除广告 | 后台播放 | 自动播放 | 完整标题
+// @description:zh-TW 将原生控制栏移至视频下方显示 | 去除广告 | 后台播放 | 自动播放 | 完整标题
 // @run-at            document-start
 // @grant             unsafeWindow
 // @grant             GM_addStyle
@@ -43,26 +43,44 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
 }
 
 // ==========================================
-// 【核心修改：强制控制栏常显】
+// 【核心CSS：强制重构播放器布局】
 // ==========================================
 GM_addStyle(`
-    /* 1. 强制播放器控制栏永远不透明（一直显示） */
-    .plyr--video .plyr__controls {
-        opacity: 1 !important;
-        visibility: visible !important;
-        transform: translate(0, 0) !important; /* 防止它向下位移隐藏 */
-        pointer-events: auto !important; /* 确保一直可以点击 */
-        background: linear-gradient(rgba(0,0,0,0), rgba(0,0,0,0.75)) !important; /* 加深底部阴影，保证白色文字清晰可见 */
-        padding-bottom: 10px !important; /* 稍微增加底部间距，防止贴底太紧 */
+    /* 1. 将播放器容器改为垂直 Flex 布局，让视频和控制栏上下排列 */
+    .plyr {
+        display: flex !important;
+        flex-direction: column !important;
+        height: auto !important;
     }
 
-    /* 2. 针对移动端/iPad，防止系统自动隐藏类生效 */
+    /* 2. 视频区域：占据剩余空间，保持比例 */
+    .plyr__video-wrapper {
+        flex: 1 !important;
+        position: relative !important;
+        height: auto !important;
+        width: 100% !important;
+        aspect-ratio: 16/9 !important; /* 强制保持16:9，防止被挤压 */
+    }
+
+    /* 3. 控制栏：取消绝对定位，变为普通文档流，置于视频下方 */
+    .plyr__controls {
+        position: static !important; /* 关键：从悬浮变为静止 */
+        opacity: 1 !important;       /* 强制不透明 */
+        visibility: visible !important;
+        transform: none !important;  /* 禁止位移隐藏 */
+        background: #000 !important; /* 黑色背景，让它像一个独立的栏 */
+        padding: 10px !important;    /* 增加一点内边距 */
+        width: 100% !important;
+        z-index: 9999 !important;
+    }
+
+    /* 4. 修复移动端可能存在的自动隐藏类干扰 */
     .plyr--hide-controls .plyr__controls {
         opacity: 1 !important;
-        visibility: visible !important;
+        display: flex !important;
     }
-
-    /* 3. 优化视频标题样式（如果需要） */
+    
+    /* 5. 标题区域：防止文字换行混乱 */
     div.my-2.text-sm.text-nord4.truncate { 
         white-space: normal; 
     }
@@ -111,13 +129,11 @@ GM_addStyle(`
         var player = document.querySelector('video.player')
 
         // ==========================================
-        // 【清理残留UI：强制删除之前的按钮】
+        // 【清理残留UI】
         // ==========================================
-        // 检查是否已经存在之前的自定义控制栏，如果有，直接删掉
         var oldCustomBar = document.getElementById('missav-custom-controls');
-        if (oldCustomBar) {
-            oldCustomBar.remove();
-        }
+        if (oldCustomBar) oldCustomBar.remove();
+        
         var bar = video.nextElementSibling;
         if (bar) {
             var insertedButtons = bar.querySelectorAll('span.isolate.inline-flex.rounded-md.shadow-sm');
@@ -190,7 +206,6 @@ GM_addStyle(`
 
         // ==========================================
 
-        //FIXME -  禁止播放规则1,就这样写了,有空改改.
         let windowIsBlurred
         window.onblur = () => { windowIsBlurred = true }
         window.onfocus = () => { windowIsBlurred = false }
@@ -252,4 +267,118 @@ GM_addStyle(`
 
                     })
                     saveBtn.addEventListener('click', () => {
-                        alert('尚未完成添加操作,敬请期待
+                        alert('尚未完成添加操作,敬请期待')
+                    })
+
+                    profileDiv.addEventListener('mouseleave', () => {
+                        profileDiv.style.display = 'none'
+                    })
+
+                })
+                .catch(error => {
+                    console.error('🔍 ~ 获取页面失败:', error)
+                })
+        })
+
+        console.log('【视频控制条增强】完成。')
+    }
+    var trigger = () => {
+        return !!document.querySelector('body > div:nth-child(3) > div.sm\\:container > div > div.flex-1.order-first > div:first-child > div.relative')
+    }
+    var interval
+    var timeout
+    interval = setInterval(() => {
+        if (trigger()) {
+            clearInterval(interval)
+            clearTimeout(timeout)
+            handle()
+            return
+        }
+    }, 200)
+    timeout = setTimeout(() => {
+        clearInterval(interval)
+        console.log('【视频控制条增强】触发条件匹配超时，已取消。')
+    }, 10 * 1000)
+
+    //LINK - 删除广告
+    function removeElements() {
+        document.querySelectorAll('div[class*="lg:hidden"]')
+        const allElements = document.querySelectorAll(
+            'div[class^="root"], ' +//右下角弹出窗
+            'div[class*="fixed"][class*="right-"][class*="bottom-"], ' +
+            'div[class*="pt-"][class*="pb-"][class*="px-"]:not([class*="sm:"]), ' +
+            'div[class*="lg:hidden"], ' +//视频下方广告
+            'div[class*="lg:block"], ' +
+            'div.ts-outstream-video, ' +//页面底部广告
+            'iframe,' +
+            'ul.mb-4.list-none.text-nord14,' +//视频下面跳官方广告telegram,和一些其他的广告
+            '.prose,' +//石床澪
+            'img[alt="MissAV takeover Fanza"]'//石床澪图片
+        )
+        allElements.forEach(el => {
+            if (el.tagName.toLowerCase() === 'iframe') {
+                el.remove()
+            } else {
+                el.style.display = 'none'
+            }
+        })
+    }
+    //LINK - 节流函数
+    function throttle(fn, delay) {
+        let lastCall = 0
+        return function (...args) {
+            const now = new Date().getTime()
+            if (now - lastCall < delay) {
+                return
+            }
+            lastCall = now
+            return fn(...args)
+        }
+    }
+
+    function toLink() {
+        const origin = window.location.origin
+        const allDivs = document.querySelectorAll('div.my-2.text-sm.text-nord4.truncate, div.flex-1.min-w-0')
+        allDivs.forEach(div => {
+            if (div.matches('div.flex-1.min-w-0')) {
+                const h2 = div.querySelector('h2')
+                if (h2) {
+                    const text = h2.innerText
+                    const link = document.createElement('a')
+                    link.href = `${origin}/genres/${text}`
+                    link.innerText = text
+                    h2.innerHTML = ''
+                    h2.appendChild(link)
+                }
+            }
+        })
+    }
+
+    unsafeWindow.open = () => { }
+
+    document.addEventListener('DOMContentLoaded', () => {
+
+        GM_addStyle(`div.my-2.text-sm.text-nord4.truncate { white-space: normal;}`)
+        const observer = new MutationObserver(throttle(() => {
+            removeElements()
+            toLink()
+
+        }, 500))
+        observer.observe(document, { childList: true, subtree: true })
+    })
+
+    document.addEventListener('ready', () => {
+        const showMore = document.querySelector('a.text-nord13.font-medium.flex.items-center')
+        if (showMore) { showMore.click() }
+
+        const pause = unsafeWindow.player.pause
+        if (videoSettings.autoPauseDisable == 0) {
+            unsafeWindow.player.pause = () => {
+                if (document.hasFocus()) {
+                    pause()
+                }
+            }
+        }
+    })
+
+})()
