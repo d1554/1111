@@ -149,7 +149,7 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
         // 后台禁止自动暂停模式
         autoPauseDisable: 1, // 0:默认模式(浏览器同一组标签,播放页面切换到另外标签暂停播放), 1:禁止所有暂停播放,切换到同一组标签不暂停播放
         // 自动静音播放
-        autoMutePlay: false
+        autoMutePlay: true
     };
 
     (() => {
