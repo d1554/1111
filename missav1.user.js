@@ -13,7 +13,7 @@
 // @match             https://thisav.com/*
 // @author            DonkeyBear,track no,mrhydra,iSwfe,人民的勤务员 <china.qinwuyuan@gmail.com>
 // @license           MIT
-// @version           2025.12.04.RestoreControls
+// @version           2025.12.04.MobileFix
 // ==/UserScript==
 
 const url = window.location.href
@@ -31,30 +31,23 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
         defaultVolume: 1.0,     
     };
 
-    // 🟢【CSS 样式配置】
+    // 🟢【CSS 基础清理】
     GM_addStyle(`
-        /* ============================
-           1. 仅隐藏 Loop 循环控制条 (保留快进按钮)
-           ============================ */
+        /* 1. 基础隐藏：尝试隐藏已知的控制栏类名 (兼容部分手机布局) */
+        div.flex.-mx-4.sm\\:m-0.mt-1.bg-black.justify-center, 
+        div.grid.grid-cols-6.gap-2, /* 手机版常用的网格布局 */
         div[x-data*="loop"], 
-        #loop-control-bar,
-        /* 针对部分手机端 Loop 条的隐藏 */
-        form[x-data*="loop"],
-        .flex.items-center.justify-between > button:last-child
-        {
+        #loop-control-bar {
             display: none !important;
         }
 
-        /* ============================
-           2. 布局调整：常显 + 下移 (防止遮挡)
-           ============================ */
-        /* 【非全屏】底部挤出 40px 空间 */
+        /* 2. 【非全屏】底部挤出 40px 空间 */
         .plyr:not(.plyr--fullscreen-active) {
             padding-bottom: 40px !important; 
             background-color: #000 !important;
         }
 
-        /* 【非全屏】控件钉死在底部，常显 */
+        /* 3. 【非全屏】控件钉死在底部，常显 */
         .plyr:not(.plyr--fullscreen-active) .plyr__controls {
             position: absolute !important;
             bottom: 0 !important;
@@ -72,7 +65,7 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
             transform: none !important;
         }
 
-        /* 全屏状态下也常显 */
+        /* 4. 全屏/隐藏状态下也强制常显 */
         .plyr--hide-controls .plyr__controls,
         .plyr--fullscreen-active .plyr__controls {
             opacity: 1 !important;
@@ -80,13 +73,13 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
             pointer-events: auto !important;
         }
 
-        /* 调整视频高度 */
+        /* 5. 调整视频高度 */
         .plyr:not(.plyr--fullscreen-active) .plyr__video-wrapper {
             height: 100% !important;
             padding-bottom: 0 !important;
         }
 
-        /* 去广告 */
+        /* 6. 去广告 */
         div[class*="lg:hidden"], div.ts-outstream-video, iframe {
             display: none !important;
         }
@@ -127,12 +120,17 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
                         clearInterval(autoPlayTimer);
                     }).catch(e => {});
 
+                    // 交互后：解除静音 + 应用音量逻辑
                     if (!player.hasAttribute('data-unmute-listener')) {
                         const unmute = () => {
                             if (player.muted) {
                                 player.muted = false;
+                                console.log("🔊 当前音量:", player.volume);
                                 if (player.volume < 0.05) {
                                     player.volume = 1.0; 
+                                    console.log("🔊 音量过小，已强制设置为 100%");
+                                } else {
+                                    console.log("🔊 保持记忆音量");
                                 }
                             }
                             ['click', 'touchstart', 'keydown'].forEach(evt => 
@@ -224,23 +222,29 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
         })
     }
 
-    // 🟢【JS 猎杀逻辑】只针对 Loop 条，不误伤 10m/1m 按钮
+    // 🟢【JS 猎杀逻辑：不看CSS类名，直接看文字内容】
     function nukeJunkControls() {
-        // 这里的关键词只保留 Loop 和 Skip，不再包含 10m 等
-        const junkKeywords = ['Loop', 'ループ', 'Skip'];
+        // 定义要猎杀的按钮文字特征 (包含这些字的通通干掉)
+        const junkKeywords = ['10m', '1m', '10s', 'Loop', 'ループ', 'Skip'];
         
+        // 1. 扫描所有按钮
         const buttons = document.querySelectorAll('button');
         buttons.forEach(btn => {
             const text = btn.innerText.trim();
+            // 如果按钮文字包含垃圾关键词
             if (junkKeywords.some(kw => text.includes(kw))) {
+                // 找到它的父级容器 (通常是 flex 或 grid)
                 const container = btn.closest('.flex') || btn.closest('.grid') || btn.parentElement;
                 if (container) {
+                    // 隐藏父级容器，斩草除根
                     container.style.display = 'none';
                 }
+                // 就算找不到父级，把按钮自己藏了
                 btn.style.display = 'none';
             }
         });
 
+        // 2. 额外补刀：针对输入框 (那个 00:00:00)
         const inputs = document.querySelectorAll('input[placeholder="00:00:00"]');
         inputs.forEach(input => {
              const parentBar = input.closest('.flex') || input.parentElement;
@@ -252,6 +256,7 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
         return !!document.querySelector('body > div:nth-child(3) > div.sm\\:container > div > div.flex-1.order-first > div:first-child > div.relative')
     }
     
+    // 轮询机制
     var interval = setInterval(() => {
         if (trigger()) {
             clearInterval(interval)
@@ -263,7 +268,10 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
 
     function cleanupPage() {
         document.querySelectorAll('iframe, div[class*="lg:hidden"], div.ts-outstream-video').forEach(el => el.remove());
+        
+        // 🔥 执行猎杀逻辑 🔥
         nukeJunkControls();
+
         const origin = window.location.origin
         document.querySelectorAll('div.flex-1.min-w-0 h2').forEach(h2 => {
             if (!h2.querySelector('a') && h2.innerText) {
@@ -276,6 +284,7 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
     unsafeWindow.open = () => { }
 
     document.addEventListener('DOMContentLoaded', () => {
+        // 开启观察者，只要页面有变动，就重新执行一次猎杀，防止手机版动态加载出来
         const observer = new MutationObserver(() => cleanupPage())
         observer.observe(document, { childList: true, subtree: true })
     })
