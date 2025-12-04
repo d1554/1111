@@ -13,7 +13,7 @@
 // @match             https://thisav.com/*
 // @author            DonkeyBear,track no,mrhydra,iSwfe,人民的勤务员 <china.qinwuyuan@gmail.com>
 // @license           MIT
-// @version           2025.12.04.MobileFix
+// @version           2025.12.04.PureClean
 // ==/UserScript==
 
 const url = window.location.href
@@ -31,13 +31,14 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
         defaultVolume: 1.0,     
     };
 
-    // 🟢【CSS 基础清理】
+    // 🟢【CSS 布局与清理】
     GM_addStyle(`
-        /* 1. 基础隐藏：尝试隐藏已知的控制栏类名 (兼容部分手机布局) */
+        /* 1. 隐藏多余的绿色按钮栏、以及底部的 Loop 循环控制条 */
         div.flex.-mx-4.sm\\:m-0.mt-1.bg-black.justify-center, 
-        div.grid.grid-cols-6.gap-2, /* 手机版常用的网格布局 */
-        div[x-data*="loop"], 
-        #loop-control-bar {
+        div[class*="items-center"][class*="justify-between"] > button:last-child,
+        div[x-data*="loop"], /* 针对 Loop 条的特定隐藏 */
+        #loop-control-bar    /* 假设ID隐藏 */
+        {
             display: none !important;
         }
 
@@ -126,6 +127,8 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
                             if (player.muted) {
                                 player.muted = false;
                                 console.log("🔊 当前音量:", player.volume);
+                                
+                                // 智能音量：如果音量过小则拉满，否则记忆
                                 if (player.volume < 0.05) {
                                     player.volume = 1.0; 
                                     console.log("🔊 音量过小，已强制设置为 100%");
@@ -146,6 +149,8 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
             }, 500);
             setTimeout(() => clearInterval(autoPlayTimer), 10000);
         }
+
+        // ❌【已删除】这里原本是生成悬浮按钮的代码，现在已经删除了
 
         // 交互逻辑
         const player = document.querySelector('video.player');
@@ -222,32 +227,24 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
         })
     }
 
-    // 🟢【JS 猎杀逻辑：不看CSS类名，直接看文字内容】
-    function nukeJunkControls() {
-        // 定义要猎杀的按钮文字特征 (包含这些字的通通干掉)
-        const junkKeywords = ['10m', '1m', '10s', 'Loop', 'ループ', 'Skip'];
-        
-        // 1. 扫描所有按钮
+    // 🟢【JS 强力去除 Loop 按钮】
+    function removeLoopBar() {
+        // 查找所有按钮，如果包含"ループ"或"Loop"文本，则隐藏其父级容器
         const buttons = document.querySelectorAll('button');
         buttons.forEach(btn => {
-            const text = btn.innerText.trim();
-            // 如果按钮文字包含垃圾关键词
-            if (junkKeywords.some(kw => text.includes(kw))) {
-                // 找到它的父级容器 (通常是 flex 或 grid)
-                const container = btn.closest('.flex') || btn.closest('.grid') || btn.parentElement;
+            if (btn.innerText.includes('ループ') || btn.innerText.includes('Loop')) {
+                // 向上找几层，找到那个黑色的条 (通常是 flex 容器)
+                const container = btn.closest('.flex.items-center.justify-between') || btn.closest('div[class*="bg-black"]');
                 if (container) {
-                    // 隐藏父级容器，斩草除根
                     container.style.display = 'none';
                 }
-                // 就算找不到父级，把按钮自己藏了
-                btn.style.display = 'none';
             }
         });
-
-        // 2. 额外补刀：针对输入框 (那个 00:00:00)
+        
+        // 针对你图片中的结构进行额外清理
         const inputs = document.querySelectorAll('input[placeholder="00:00:00"]');
         inputs.forEach(input => {
-             const parentBar = input.closest('.flex') || input.parentElement;
+             const parentBar = input.closest('.flex') || input.parentElement.parentElement;
              if(parentBar) parentBar.style.display = 'none';
         });
     }
@@ -256,7 +253,6 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
         return !!document.querySelector('body > div:nth-child(3) > div.sm\\:container > div > div.flex-1.order-first > div:first-child > div.relative')
     }
     
-    // 轮询机制
     var interval = setInterval(() => {
         if (trigger()) {
             clearInterval(interval)
@@ -269,8 +265,8 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
     function cleanupPage() {
         document.querySelectorAll('iframe, div[class*="lg:hidden"], div.ts-outstream-video').forEach(el => el.remove());
         
-        // 🔥 执行猎杀逻辑 🔥
-        nukeJunkControls();
+        // 持续检测并移除 Loop 按钮
+        removeLoopBar();
 
         const origin = window.location.origin
         document.querySelectorAll('div.flex-1.min-w-0 h2').forEach(h2 => {
@@ -284,7 +280,6 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
     unsafeWindow.open = () => { }
 
     document.addEventListener('DOMContentLoaded', () => {
-        // 开启观察者，只要页面有变动，就重新执行一次猎杀，防止手机版动态加载出来
         const observer = new MutationObserver(() => cleanupPage())
         observer.observe(document, { childList: true, subtree: true })
     })
