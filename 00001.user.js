@@ -1,14 +1,14 @@
 // ==UserScript==
 // @name              MissAV Enhanced Assistant
 // @name              MissAV Enhancer
-// @name:zh           MissAV 增强小助手 (控制栏下移常显版)
-// @name:zh-CN        MissAV 增强小助手 (控制栏下移常显版)
-// @name:zh-HK        MissAV 增強小助手 (控制欄下移常顯版)
-// @name:zh-TW        MissAV 增強小助手 (控制欄下移常顯版)
-// @description:zh    将原生控制栏移至视频下方显示 | 去除广告 | 后台播放 | 自动播放 | 完整标题
-// @description:zh-CN 将原生控制栏移至视频下方显示 | 去除广告 | 后台播放 | 自动播放 | 完整标题
-// @description:zh-HK 将原生控制栏移至视频下方显示 | 去除广告 | 后台播放 | 自动播放 | 完整标题
-// @description:zh-TW 将原生控制栏移至视频下方显示 | 去除广告 | 后台播放 | 自动播放 | 完整标题
+// @name:zh           MissAV 增强小助手 (纯净常显版)
+// @name:zh-CN        MissAV 增强小助手 (纯净常显版)
+// @name:zh-HK        MissAV 增強小助手 (純淨常顯版)
+// @name:zh-TW        MissAV 增強小助手 (純淨常顯版)
+// @description:zh    原生控制栏常显(不自动隐藏) | 去除广告 | 后台播放 | 自动播放 | 完整标题
+// @description:zh-CN 原生控制栏常显(不自动隐藏) | 去除广告 | 后台播放 | 自动播放 | 完整标题
+// @description:zh-HK 原生控制欄常顯(不自動隱藏) | 去除廣告 | 後台播放 | 自動播放 | 完整標題
+// @description:zh-TW 原生控制欄常顯(不自動隱藏) | 去除廣告 | 後台播放 | 自動播放 | 完整標題
 // @run-at            document-start
 // @grant             unsafeWindow
 // @grant             GM_addStyle
@@ -43,44 +43,26 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
 }
 
 // ==========================================
-// 【核心CSS：强制重构播放器布局】
+// 【核心修改：强制控制栏常显】
 // ==========================================
 GM_addStyle(`
-    /* 1. 将播放器容器改为垂直 Flex 布局，让视频和控制栏上下排列 */
-    .plyr {
-        display: flex !important;
-        flex-direction: column !important;
-        height: auto !important;
-    }
-
-    /* 2. 视频区域：占据剩余空间，保持比例 */
-    .plyr__video-wrapper {
-        flex: 1 !important;
-        position: relative !important;
-        height: auto !important;
-        width: 100% !important;
-        aspect-ratio: 16/9 !important; /* 强制保持16:9，防止被挤压 */
-    }
-
-    /* 3. 控制栏：取消绝对定位，变为普通文档流，置于视频下方 */
-    .plyr__controls {
-        position: static !important; /* 关键：从悬浮变为静止 */
-        opacity: 1 !important;       /* 强制不透明 */
+    /* 1. 强制播放器控制栏永远不透明（一直显示） */
+    .plyr--video .plyr__controls {
+        opacity: 1 !important;
         visibility: visible !important;
-        transform: none !important;  /* 禁止位移隐藏 */
-        background: #000 !important; /* 黑色背景，让它像一个独立的栏 */
-        padding: 10px !important;    /* 增加一点内边距 */
-        width: 100% !important;
-        z-index: 9999 !important;
+        transform: translate(0, 0) !important; /* 防止它向下位移隐藏 */
+        pointer-events: auto !important; /* 确保一直可以点击 */
+        background: linear-gradient(rgba(0,0,0,0), rgba(0,0,0,0.75)) !important; /* 加深底部阴影，保证白色文字清晰可见 */
+        padding-bottom: 10px !important; /* 稍微增加底部间距，防止贴底太紧 */
     }
 
-    /* 4. 修复移动端可能存在的自动隐藏类干扰 */
+    /* 2. 针对移动端/iPad，防止系统自动隐藏类生效 */
     .plyr--hide-controls .plyr__controls {
         opacity: 1 !important;
-        display: flex !important;
+        visibility: visible !important;
     }
-    
-    /* 5. 标题区域：防止文字换行混乱 */
+
+    /* 3. 优化视频标题样式（如果需要） */
     div.my-2.text-sm.text-nord4.truncate { 
         white-space: normal; 
     }
@@ -129,11 +111,13 @@ GM_addStyle(`
         var player = document.querySelector('video.player')
 
         // ==========================================
-        // 【清理残留UI】
+        // 【清理残留UI：强制删除之前的按钮】
         // ==========================================
+        // 检查是否已经存在之前的自定义控制栏，如果有，直接删掉
         var oldCustomBar = document.getElementById('missav-custom-controls');
-        if (oldCustomBar) oldCustomBar.remove();
-        
+        if (oldCustomBar) {
+            oldCustomBar.remove();
+        }
         var bar = video.nextElementSibling;
         if (bar) {
             var insertedButtons = bar.querySelectorAll('span.isolate.inline-flex.rounded-md.shadow-sm');
@@ -206,6 +190,7 @@ GM_addStyle(`
 
         // ==========================================
 
+        //FIXME -  禁止播放规则1,就这样写了,有空改改.
         let windowIsBlurred
         window.onblur = () => { windowIsBlurred = true }
         window.onfocus = () => { windowIsBlurred = false }
@@ -315,10 +300,13 @@ GM_addStyle(`
             '.prose,' +//石床澪
             'img[alt="MissAV takeover Fanza"]'//石床澪图片
         )
+        //  console.log(`[missav页面修改] 找到 ${allElements.length} 个需要处理的元素`)
         allElements.forEach(el => {
             if (el.tagName.toLowerCase() === 'iframe') {
+                console.log(`[missav页面修改] 正在移除的 iframe 元素`)
                 el.remove()
             } else {
+                //  console.log(`[missav页面修改] 正在隐藏的 div 元素，class 属性: ${el.className}`)
                 el.style.display = 'none'
             }
         })
@@ -339,6 +327,7 @@ GM_addStyle(`
     function toLink() {
         const origin = window.location.origin
         const allDivs = document.querySelectorAll('div.my-2.text-sm.text-nord4.truncate, div.flex-1.min-w-0')
+        // console.log(`[missav页面修改] 找到 ${allDivs.length} 个需要处理的元素`)
         allDivs.forEach(div => {
             if (div.matches('div.flex-1.min-w-0')) {
                 const h2 = div.querySelector('h2')
@@ -349,13 +338,16 @@ GM_addStyle(`
                     link.innerText = text
                     h2.innerHTML = ''
                     h2.appendChild(link)
+                    console.log(`[missav页面修改] 已经将文本 "${text}" 转换为链接`)
                 }
             }
         })
     }
 
+    // 取消打开新窗口行为
     unsafeWindow.open = () => { }
 
+    //LINK - 页面加载之后执行操作
     document.addEventListener('DOMContentLoaded', () => {
 
         GM_addStyle(`div.my-2.text-sm.text-nord4.truncate { white-space: normal;}`)
@@ -368,9 +360,11 @@ GM_addStyle(`
     })
 
     document.addEventListener('ready', () => {
+        //自动点击视频`显示更多`
         const showMore = document.querySelector('a.text-nord13.font-medium.flex.items-center')
         if (showMore) { showMore.click() }
 
+        // 取消页面没焦点自动暂停
         const pause = unsafeWindow.player.pause
         if (videoSettings.autoPauseDisable == 0) {
             unsafeWindow.player.pause = () => {
