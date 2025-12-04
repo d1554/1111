@@ -1,14 +1,14 @@
 // ==UserScript==
 // @name              MissAV Enhanced Assistant
 // @name              MissAV Enhancer
-// @name:zh           MissAV 增强小助手 (纯净后台版)
-// @name:zh-CN        MissAV 增强小助手 (纯净后台版)
-// @name:zh-HK        MissAV 增強小助手 (純淨後台版)
-// @name:zh-TW        MissAV 增強小助手 (純淨後台版)
-// @description:zh    只有功能没有按钮：去除广告|后台播放|自动播放|自定义快进时间|完整标题|更多功能...
-// @description:zh-CN 只有功能没有按钮：去除广告|后台播放|自动播放|自定义快进时间|完整标题|更多功能...
-// @description:zh-HK 只有功能沒有按鈕：去除廣告|後台播放|自動播放|自定義快進時間|完整標題|更多功能...
-// @description:zh-TW 只有功能沒有按鈕：去除廣告|後台播放|自動播放|自定義快進時間|完整標題|更多功能...
+// @name:zh           MissAV 增强小助手 (纯净常显版)
+// @name:zh-CN        MissAV 增强小助手 (纯净常显版)
+// @name:zh-HK        MissAV 增強小助手 (純淨常顯版)
+// @name:zh-TW        MissAV 增強小助手 (純淨常顯版)
+// @description:zh    原生控制栏常显(不自动隐藏) | 去除广告 | 后台播放 | 自动播放 | 完整标题
+// @description:zh-CN 原生控制栏常显(不自动隐藏) | 去除广告 | 后台播放 | 自动播放 | 完整标题
+// @description:zh-HK 原生控制欄常顯(不自動隱藏) | 去除廣告 | 後台播放 | 自動播放 | 完整標題
+// @description:zh-TW 原生控制欄常顯(不自動隱藏) | 去除廣告 | 後台播放 | 自動播放 | 完整標題
 // @run-at            document-start
 // @grant             unsafeWindow
 // @grant             GM_addStyle
@@ -41,6 +41,33 @@ const url = window.location.href
 if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
     window.location.href = url.replace('missav.com', 'missav.live').replace('thisav.com', 'missav.live')
 }
+
+// ==========================================
+// 【核心修改：强制控制栏常显】
+// ==========================================
+GM_addStyle(`
+    /* 1. 强制播放器控制栏永远不透明（一直显示） */
+    .plyr--video .plyr__controls {
+        opacity: 1 !important;
+        visibility: visible !important;
+        transform: translate(0, 0) !important; /* 防止它向下位移隐藏 */
+        pointer-events: auto !important; /* 确保一直可以点击 */
+        background: linear-gradient(rgba(0,0,0,0), rgba(0,0,0,0.75)) !important; /* 加深底部阴影，保证白色文字清晰可见 */
+        padding-bottom: 10px !important; /* 稍微增加底部间距，防止贴底太紧 */
+    }
+
+    /* 2. 针对移动端/iPad，防止系统自动隐藏类生效 */
+    .plyr--hide-controls .plyr__controls {
+        opacity: 1 !important;
+        visibility: visible !important;
+    }
+
+    /* 3. 优化视频标题样式（如果需要） */
+    div.my-2.text-sm.text-nord4.truncate { 
+        white-space: normal; 
+    }
+`);
+
 (() => {
     'use strict'
     const videoSettings = {
@@ -90,9 +117,7 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
         var oldCustomBar = document.getElementById('missav-custom-controls');
         if (oldCustomBar) {
             oldCustomBar.remove();
-            console.log("🧹 已清理残留的旧版控制栏");
         }
-        // 检查是否在原生bar里插入了按钮，如果有，清理掉
         var bar = video.nextElementSibling;
         if (bar) {
             var insertedButtons = bar.querySelectorAll('span.isolate.inline-flex.rounded-md.shadow-sm');
@@ -150,7 +175,6 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
             e.stopImmediatePropagation();
             e.preventDefault();
 
-            console.log("⚡ 拦截到点击，强制切换播放状态");
             if (player.paused) {
                 player.play();
             } else {
@@ -228,127 +252,4 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
 
                     })
                     saveBtn.addEventListener('click', () => {
-                        alert('尚未完成添加操作,敬请期待')
-                    })
-
-                    profileDiv.addEventListener('mouseleave', () => {
-                        profileDiv.style.display = 'none'
-                    })
-
-                })
-                .catch(error => {
-                    console.error('🔍 ~ 获取页面失败:', error)
-                })
-        })
-
-        console.log('【视频控制条增强】完成。')
-    }
-    var trigger = () => {
-        return !!document.querySelector('body > div:nth-child(3) > div.sm\\:container > div > div.flex-1.order-first > div:first-child > div.relative')
-    }
-    var interval
-    var timeout
-    interval = setInterval(() => {
-        if (trigger()) {
-            clearInterval(interval)
-            clearTimeout(timeout)
-            handle()
-            return
-        }
-    }, 200)
-    timeout = setTimeout(() => {
-        clearInterval(interval)
-        console.log('【视频控制条增强】触发条件匹配超时，已取消。')
-    }, 10 * 1000)
-
-    //LINK - 删除广告
-    function removeElements() {
-        document.querySelectorAll('div[class*="lg:hidden"]')
-        const allElements = document.querySelectorAll(
-            'div[class^="root"], ' +//右下角弹出窗
-            'div[class*="fixed"][class*="right-"][class*="bottom-"], ' +
-            'div[class*="pt-"][class*="pb-"][class*="px-"]:not([class*="sm:"]), ' +
-            'div[class*="lg:hidden"], ' +//视频下方广告
-            'div[class*="lg:block"], ' +
-            'div.ts-outstream-video, ' +//页面底部广告
-            'iframe,' +
-            'ul.mb-4.list-none.text-nord14,' +//视频下面跳官方广告telegram,和一些其他的广告
-            '.prose,' +//石床澪
-            'img[alt="MissAV takeover Fanza"]'//石床澪图片
-        )
-        //  console.log(`[missav页面修改] 找到 ${allElements.length} 个需要处理的元素`)
-        allElements.forEach(el => {
-            if (el.tagName.toLowerCase() === 'iframe') {
-                console.log(`[missav页面修改] 正在移除的 iframe 元素`)
-                el.remove()
-            } else {
-                //  console.log(`[missav页面修改] 正在隐藏的 div 元素，class 属性: ${el.className}`)
-                el.style.display = 'none'
-            }
-        })
-    }
-    //LINK - 节流函数
-    function throttle(fn, delay) {
-        let lastCall = 0
-        return function (...args) {
-            const now = new Date().getTime()
-            if (now - lastCall < delay) {
-                return
-            }
-            lastCall = now
-            return fn(...args)
-        }
-    }
-
-    function toLink() {
-        const origin = window.location.origin
-        const allDivs = document.querySelectorAll('div.my-2.text-sm.text-nord4.truncate, div.flex-1.min-w-0')
-        // console.log(`[missav页面修改] 找到 ${allDivs.length} 个需要处理的元素`)
-        allDivs.forEach(div => {
-            if (div.matches('div.flex-1.min-w-0')) {
-                const h2 = div.querySelector('h2')
-                if (h2) {
-                    const text = h2.innerText
-                    const link = document.createElement('a')
-                    link.href = `${origin}/genres/${text}`
-                    link.innerText = text
-                    h2.innerHTML = ''
-                    h2.appendChild(link)
-                    console.log(`[missav页面修改] 已经将文本 "${text}" 转换为链接`)
-                }
-            }
-        })
-    }
-
-    // 取消打开新窗口行为
-    unsafeWindow.open = () => { }
-
-    //LINK - 页面加载之后执行操作
-    document.addEventListener('DOMContentLoaded', () => {
-
-        GM_addStyle(`div.my-2.text-sm.text-nord4.truncate { white-space: normal;}`)
-        const observer = new MutationObserver(throttle(() => {
-            removeElements()
-            toLink()
-
-        }, 500))
-        observer.observe(document, { childList: true, subtree: true })
-    })
-
-    document.addEventListener('ready', () => {
-        //自动点击视频`显示更多`
-        const showMore = document.querySelector('a.text-nord13.font-medium.flex.items-center')
-        if (showMore) { showMore.click() }
-
-        // 取消页面没焦点自动暂停
-        const pause = unsafeWindow.player.pause
-        if (videoSettings.autoPauseDisable == 0) {
-            unsafeWindow.player.pause = () => {
-                if (document.hasFocus()) {
-                    pause()
-                }
-            }
-        }
-    })
-
-})()
+                        alert('尚未完成添加操作,敬请期待
