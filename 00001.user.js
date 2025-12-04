@@ -202,25 +202,32 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
         }
 
         // ==========================================
-        // 【2. 强力修复：单次点击即暂停 (绕过唤醒菜单)】
+        // 【2. 进度条拖拽优化：松手后强制自动播放】
+        // ==========================================
+        player.addEventListener('seeked', () => {
+             // 只要发生跳转，就强制尝试播放，解决拖拽后暂停的问题
+             if (player.paused) {
+                 console.log("⏩ 进度条拖动结束 -> 自动继续播放");
+                 player.play().catch(e => console.log("自动续播被阻拦:", e));
+             }
+        });
+
+        // ==========================================
+        // 【3. 强力修复：iPad/PC 单次点击即暂停】
         // ==========================================
         let isScrolling = false;
-        // 监听 touchmove 以区分滑动和点击
         video.addEventListener('touchmove', () => { isScrolling = true; }, {passive: true});
         video.addEventListener('touchstart', () => { isScrolling = false; }, {passive: true});
 
         // 核心：使用 capture: true 在播放器收到事件之前拦截它
         video.addEventListener('touchend', (e) => {
-            // 如果是在滚动，不处理
             if (isScrolling) return;
 
-            // 如果点的是按钮、进度条等控件，不处理，交给原生逻辑
+            // 忽略控制栏上的点击 (按钮, 链接, input进度条)
             if (e.target.closest('button') || e.target.closest('a') || e.target.closest('.plyr__controls') || e.target.closest('input')) {
                 return;
             }
 
-            // ⚠️ 关键操作：阻止事件冒泡和默认行为
-            // 这会让播放器本身“不知道”你点击了，从而不会执行“显示菜单”的逻辑
             e.stopPropagation(); 
             e.stopImmediatePropagation();
             e.preventDefault();
@@ -231,11 +238,11 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
             } else {
                 player.pause();
             }
-        }, { capture: true, passive: false }); // capture: true 是重点
+        }, { capture: true, passive: false });
 
-        // PC 端点击逻辑 (保持不变)
+        // PC 端点击逻辑
         video.addEventListener('click', (e) => {
-            if (e.target.closest('button') || e.target.closest('a') || e.target.closest('.plyr__controls')) return;
+            if (e.target.closest('button') || e.target.closest('a') || e.target.closest('.plyr__controls') || e.target.closest('input')) return;
             e.stopPropagation();
             player.togglePlay();
         }, { capture: true });
