@@ -1,14 +1,14 @@
 // ==UserScript==
 // @name              MissAV Enhanced Assistant
 // @name              MissAV Enhancer
-// @name:zh           MissAV 增强小助手 (纯净常显版)
-// @name:zh-CN        MissAV 增强小助手 (纯净常显版)
-// @name:zh-HK        MissAV 增強小助手 (純淨常顯版)
-// @name:zh-TW        MissAV 增強小助手 (純淨常顯版)
-// @description:zh    原生控制栏常显(不自动隐藏) | 去除广告 | 后台播放 | 自动播放 | 完整标题
-// @description:zh-CN 原生控制栏常显(不自动隐藏) | 去除广告 | 后台播放 | 自动播放 | 完整标题
-// @description:zh-HK 原生控制欄常顯(不自動隱藏) | 去除廣告 | 後台播放 | 自動播放 | 完整標題
-// @description:zh-TW 原生控制欄常顯(不自動隱藏) | 去除廣告 | 後台播放 | 自動播放 | 完整標題
+// @name:zh           MissAV 增强小助手 (纯净后台版)
+// @name:zh-CN        MissAV 增强小助手 (纯净后台版)
+// @name:zh-HK        MissAV 增強小助手 (純淨後台版)
+// @name:zh-TW        MissAV 增強小助手 (純淨後台版)
+// @description:zh    只有功能没有按钮：去除广告|后台播放|自动播放|自定义快进时间|完整标题|更多功能...
+// @description:zh-CN 只有功能没有按钮：去除广告|后台播放|自动播放|自定义快进时间|完整标题|更多功能...
+// @description:zh-HK 只有功能沒有按鈕：去除廣告|後台播放|自動播放|自定義快進時間|完整標題|更多功能...
+// @description:zh-TW 只有功能沒有按鈕：去除廣告|後台播放|自動播放|自定義快進時間|完整標題|更多功能...
 // @run-at            document-start
 // @grant             unsafeWindow
 // @grant             GM_addStyle
@@ -41,33 +41,6 @@ const url = window.location.href
 if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
     window.location.href = url.replace('missav.com', 'missav.live').replace('thisav.com', 'missav.live')
 }
-
-// ==========================================
-// 【核心修改：强制控制栏常显】
-// ==========================================
-GM_addStyle(`
-    /* 1. 强制播放器控制栏永远不透明（一直显示） */
-    .plyr--video .plyr__controls {
-        opacity: 1 !important;
-        visibility: visible !important;
-        transform: translate(0, 0) !important; /* 防止它向下位移隐藏 */
-        pointer-events: auto !important; /* 确保一直可以点击 */
-        background: linear-gradient(rgba(0,0,0,0), rgba(0,0,0,0.75)) !important; /* 加深底部阴影，保证白色文字清晰可见 */
-        padding-bottom: 10px !important; /* 稍微增加底部间距，防止贴底太紧 */
-    }
-
-    /* 2. 针对移动端/iPad，防止系统自动隐藏类生效 */
-    .plyr--hide-controls .plyr__controls {
-        opacity: 1 !important;
-        visibility: visible !important;
-    }
-
-    /* 3. 优化视频标题样式（如果需要） */
-    div.my-2.text-sm.text-nord4.truncate { 
-        white-space: normal; 
-    }
-`);
-
 (() => {
     'use strict'
     const videoSettings = {
@@ -117,7 +90,9 @@ GM_addStyle(`
         var oldCustomBar = document.getElementById('missav-custom-controls');
         if (oldCustomBar) {
             oldCustomBar.remove();
+            console.log("🧹 已清理残留的旧版控制栏");
         }
+        // 检查是否在原生bar里插入了按钮，如果有，清理掉
         var bar = video.nextElementSibling;
         if (bar) {
             var insertedButtons = bar.querySelectorAll('span.isolate.inline-flex.rounded-md.shadow-sm');
@@ -175,6 +150,7 @@ GM_addStyle(`
             e.stopImmediatePropagation();
             e.preventDefault();
 
+            console.log("⚡ 拦截到点击，强制切换播放状态");
             if (player.paused) {
                 player.play();
             } else {
