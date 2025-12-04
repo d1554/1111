@@ -1,82 +1,254 @@
 // ==UserScript==
-// @name         安卓画中画 (PiP) 按键劫持测试
-// @namespace    http://tampermonkey.net/
-// @version      9.0
-// @description  尝试进入画中画模式，利用悬浮窗的高优先级捕获按键
-// @author       Gemini Helper
-// @match        *://*/*
-// @grant        none
+// @name              MissAV Enhanced Assistant
+// @name:zh-CN        MissAV 增强小助手
+// @description       去除广告|后台播放|自动播放|自定义快进时间|完整标题|更多功能...
+// @run-at            document-start
+// @grant             unsafeWindow
+// @grant             GM_addStyle
+// @match             https://missav123.com/*
+// @match             https://missav.ws/*
+// @match             https://missav.live/*
+// @match             https://missav.ai/*
+// @match             https://missav.com/*
+// @match             https://thisav.com/*
+// @author            DonkeyBear,track no,mrhydra,iSwfe,人民的勤务员 <china.qinwuyuan@gmail.com>
+// @license           MIT
+// @version           2025.12.04.ForceVisibleFinal
 // ==/UserScript==
 
-(function() {
-    'use strict';
+const url = window.location.href
+if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
+    window.location.href = url.replace('missav.com', 'missav.live').replace('thisav.com', 'missav.live')
+}
 
-    // 🔴 你的按钮选择器
-    const NEXT_SELECTOR = '.你的下一首按钮'; 
-    const PREV_SELECTOR = '.你的上一首按钮';
+(() => {
+    'use strict'
 
-    // UI
-    const btn = document.createElement('button');
-    btn.innerText = "📺 点击启动画中画劫持";
-    btn.style.cssText = "position:fixed; top:10px; right:10px; z-index:999999; background:red; color:white; padding:10px; border:none; border-radius:5px;";
-    document.body.appendChild(btn);
-
-    const logBox = document.createElement('div');
-    logBox.style.cssText = "position:fixed; top:60px; right:10px; z-index:999999; background:rgba(0,0,0,0.8); color:#0f0; font-size:12px; max-width:200px;";
-    document.body.appendChild(logBox);
-
-    function log(msg) {
-        logBox.innerHTML = msg + "<br>" + logBox.innerHTML;
-    }
-
-    // 创建视频
-    const video = document.createElement('video');
-    video.src = 'https://www.w3schools.com/html/mov_bbb.mp4'; // 使用真实视频以确保触发
-    video.loop = true;
-    video.muted = false; // 必须有声音
-    video.style.opacity = 0; 
-    video.style.position = 'fixed';
-    document.body.appendChild(video);
-
-    // 核心逻辑
-    btn.onclick = async () => {
-        try {
-            await video.play();
-            log("1. 视频已播放");
-
-            if (video.requestPictureInPicture) {
-                await video.requestPictureInPicture();
-                log("✅ 已进入画中画模式！");
-                log("👉 请现在按方向盘/耳机键测试");
-            } else {
-                log("❌ 此浏览器不支持画中画 API");
-            }
-        } catch (e) {
-            log("❌ 启动失败: " + e.message);
-        }
+    const videoSettings = {
+        viewportFitCover: false,
+        playCtrlEnable: true,
+        autoPauseDisable: 1,
+        autoMutePlay: true,
+        defaultVolume: null,
     };
 
-    // 监听 MediaSession (在 PiP 模式下可能会生效)
-    if ('mediaSession' in navigator) {
-        const handler = (details) => {
-            log(`捕获动作: ${details.action}`);
-            if (details.action === 'nexttrack') document.querySelector(NEXT_SELECTOR)?.click();
-            if (details.action === 'previoustrack') document.querySelector(PREV_SELECTOR)?.click();
-        };
-        navigator.mediaSession.setActionHandler('nexttrack', handler);
-        navigator.mediaSession.setActionHandler('previoustrack', handler);
+    // 🟢【CSS 核心修复】核弹级常显
+    GM_addStyle(`
+        /* 1. 隐藏多余的绿色按钮栏 */
+        div.flex.-mx-4.sm\\:m-0.mt-1.bg-black.justify-center {
+            display: none !important;
+        }
+
+        /* 2. 【非全屏】底部挤出 40px 空间，形成"下巴" */
+        .plyr:not(.plyr--fullscreen-active) {
+            padding-bottom: 40px !important;
+            background-color: #000 !important;
+        }
+
+        /* 3. 【非全屏】控件钉死在底部，背景全黑 */
+        .plyr:not(.plyr--fullscreen-active) .plyr__controls {
+            position: absolute !important;
+            bottom: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            height: 40px !important;
+            padding: 0 10px !important;
+            background: #090811 !important;
+            z-index: 99999 !important; /* 层级极高 */
+        }
+
+        /* 🔥🔥🔥 4. 暴力禁止隐藏的核心代码 🔥🔥🔥 */
+        /* 无论播放器处于什么状态(播放中、暂停、鼠标移出)，都强制不透明 */
+        .plyr__controls,
+        .plyr--hide-controls .plyr__controls,
+        .plyr--video.plyr--hide-controls .plyr__controls,
+        .plyr--fullscreen-active .plyr__controls {
+            opacity: 1 !important;           /* 强制不透明 */
+            visibility: visible !important;  /* 强制可见 */
+            pointer-events: auto !important; /* 强制可点击 */
+            transform: none !important;      /* 禁止位移隐藏 */
+            display: flex !important;        /* 禁止 display:none */
+            transition: none !important;     /* 禁止淡出动画 */
+        }
+
+        /* 5. 调整视频高度，避免被底部空间压缩 */
+        .plyr:not(.plyr--fullscreen-active) .plyr__video-wrapper {
+            height: 100% !important;
+            padding-bottom: 0 !important;
+        }
+
+        /* 6. 去除广告 */
+        div[class*="lg:hidden"], div.ts-outstream-video, iframe {
+            display: none !important;
+        }
+        div.my-2.text-sm.text-nord4.truncate {
+            white-space: normal !important;
+        }
+    `);
+
+    (() => {
+        var meta = document.createElement('meta')
+        meta.name = 'theme-color'
+        meta.content = '#090811'
+        document.querySelector('head').appendChild(meta)
+        if (videoSettings.viewportFitCover) {
+            var viewport = document.querySelector('head > meta[name=viewport]')
+            viewport.content = 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover'
+        }
+    })()
+
+    var handle = () => {
+        console.log('【MissAV助手】初始化...')
+
+        var content = document.querySelector('body > div:nth-child(3) > div.sm\\:container > div > div.flex-1.order-first > div:first-child')
+        var videoDiv = content.querySelector('div:first-child')
+        videoDiv.id = 'video'
+        videoDiv.classList.value = 'relative -mx-4 sm:m-0 mt-1'
+        videoDiv.style.cursor = 'pointer';
+
+        // 自动播放逻辑
+        if (videoSettings.autoMutePlay) {
+            let autoPlayTimer = setInterval(() => {
+                const player = document.querySelector('video.player');
+                if (player) {
+                    player.muted = true;
+                    player.playsInline = true;
+                    player.play().then(() => {
+                        console.log("✅ 自动播放成功");
+                        clearInterval(autoPlayTimer);
+                    }).catch(e => {});
+
+                    if (!player.hasAttribute('data-unmute-listener')) {
+                        const unmute = () => {
+                            if (player.muted) {
+                                player.muted = false;
+                                if (videoSettings.defaultVolume !== null) {
+                                    player.volume = videoSettings.defaultVolume;
+                                }
+                            }
+                            ['click', 'touchstart', 'keydown'].forEach(evt =>
+                                document.removeEventListener(evt, unmute, { capture: true })
+                            );
+                        };
+                        ['click', 'touchstart', 'keydown'].forEach(evt =>
+                            document.addEventListener(evt, unmute, { capture: true })
+                        );
+                        player.setAttribute('data-unmute-listener', 'true');
+                    }
+                }
+            }, 500);
+            setTimeout(() => clearInterval(autoPlayTimer), 10000);
+        }
+
+
+
+        // 交互逻辑
+        const player = document.querySelector('video.player');
+        if (player) {
+            player.addEventListener('seeked', () => {
+                 if (player.paused) player.play().catch(() => {});
+            });
+
+            let isScrolling = false;
+            videoDiv.addEventListener('touchmove', () => { isScrolling = true; }, {passive: true});
+            videoDiv.addEventListener('touchstart', () => { isScrolling = false; }, {passive: true});
+
+            const togglePlay = (e) => {
+                if (isScrolling) return;
+                if (e.target.closest('button') || e.target.closest('a') || e.target.closest('.plyr__controls') || e.target.closest('input')) {
+                    return;
+                }
+                e.stopPropagation();
+                if (player.paused) player.play(); else player.pause();
+            };
+
+            videoDiv.addEventListener('touchend', togglePlay, { capture: true, passive: false });
+            videoDiv.addEventListener('click', togglePlay, { capture: true });
+
+            let windowIsBlurred
+            window.onblur = () => { windowIsBlurred = true }
+            window.onfocus = () => { windowIsBlurred = false }
+            player.onpause = () => {
+                if (windowIsBlurred && videoSettings.autoPauseDisable === 1) {
+                    player.play();
+                }
+            }
+        }
+
+        loadActressInfo();
     }
 
-    // 监听键盘事件 (同时监听 keydown 和 keyup)
-    // 有时候 keydown 被吞了，但 keyup 会漏网
-    ['keydown', 'keyup'].forEach(eventType => {
-        document.addEventListener(eventType, (e) => {
-            // 过滤掉常规按键，只看媒体键
-            if (e.keyCode === 176 || e.key === 'MediaTrackNext' || e.code === 'MediaTrackNext') {
-                log(`⚡ ${eventType} 捕获下一首`);
-                if (eventType === 'keyup') document.querySelector(NEXT_SELECTOR)?.click();
-            }
-        });
-    });
+    function loadActressInfo() {
+        const links = document.querySelectorAll('.space-y-2 > div:nth-child(4) a')
+        links.forEach(link => {
+            const actressesLink = link.href
+            fetch(actressesLink).then(res => res.text()).then(html => {
+                const doc = new DOMParser().parseFromString(html, 'text/html')
+                const imgElement = doc.querySelector('.bg-norddark img')
+                const profile = doc.querySelector('.font-medium.text-lg.leading-6')
+                if (profile) {
+                    const saveBtn = profile.querySelector('div.hero-pattern button')
+                    if (saveBtn) saveBtn.remove()
 
-})();
+                    const profileDiv = document.createElement('div')
+                    profileDiv.className = 'ChinaGodMan-preview'
+                    Object.assign(profileDiv.style, {
+                        display: 'none', position: 'absolute', backgroundColor: 'rgba(0,0,0,0.8)',
+                        color: '#fff', padding: '10px', borderRadius: '5px', zIndex: '1000', whiteSpace: 'nowrap'
+                    });
+
+                    if (imgElement) {
+                        profileDiv.innerHTML = `<img src="${imgElement.src.replace('-t', '')}" style="max-height: 200px; max-width: 200px; display: block; margin-bottom: 5px;">`
+                        link.innerHTML = `<img src="${imgElement.src}" width="20" height="20" style="vertical-align: middle; margin-right: 4px;">` + link.innerText
+                    }
+                    profileDiv.appendChild(profile)
+                    link.parentElement.appendChild(profileDiv)
+
+                    link.addEventListener('mouseenter', () => {
+                        profileDiv.style.display = 'block'
+                        const rect = link.getBoundingClientRect()
+                        profileDiv.style.top = `${rect.bottom + window.scrollY}px`
+                        profileDiv.style.left = `${rect.left + window.scrollX}px`
+                    })
+                    link.addEventListener('mouseleave', () => { profileDiv.style.display = 'none' })
+                }
+            }).catch(() => {})
+        })
+    }
+
+    var trigger = () => {
+        return !!document.querySelector('body > div:nth-child(3) > div.sm\\:container > div > div.flex-1.order-first > div:first-child > div.relative')
+    }
+
+    var interval = setInterval(() => {
+        if (trigger()) {
+            clearInterval(interval)
+            handle()
+        }
+    }, 200)
+
+    setTimeout(() => clearInterval(interval), 10000)
+
+    function cleanupPage() {
+        document.querySelectorAll('iframe, div[class*="lg:hidden"], div.ts-outstream-video').forEach(el => el.remove());
+        const origin = window.location.origin
+        document.querySelectorAll('div.flex-1.min-w-0 h2').forEach(h2 => {
+            if (!h2.querySelector('a') && h2.innerText) {
+                const text = h2.innerText
+                h2.innerHTML = `<a href="${origin}/genres/${text}">${text}</a>`
+            }
+        })
+    }
+
+    unsafeWindow.open = () => { }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const observer = new MutationObserver(() => cleanupPage())
+        observer.observe(document, { childList: true, subtree: true })
+    })
+
+    document.addEventListener('ready', () => {
+        const showMore = document.querySelector('a.text-nord13.font-medium.flex.items-center')
+        if (showMore) showMore.click()
+    })
+})()
