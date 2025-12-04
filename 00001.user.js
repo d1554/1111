@@ -89,4 +89,9 @@
 // @match             https://missav.ai/*
 // @match             https://missav.com/*
 // @match             https://thisav.com/*
-// @author            Don
+// @author            DonkeyBear,track no,mrhydra,iSwfe,人民的勤务员 <china.qinwuyuan@gmail.com>
+// @namespace         https://github.com/ChinaGodMan/UserScripts
+// @supportURL        https://github.com/ChinaGodMan/UserScripts/issues
+// @homepageURL       https://github.com/ChinaGodMan/UserScripts
+// @license           MIT
+// @icon
