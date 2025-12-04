@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name              MissAV Enhanced Assistant
 // @name:zh-CN        MissAV 增强小助手
-// @description       修复手机端显示|去除广告|后台播放|自动播放|完整标题
+// @description       去除广告|后台播放|自动播放|自定义快进时间|完整标题|更多功能...
 // @run-at            document-start
 // @grant             unsafeWindow
 // @grant             GM_addStyle
@@ -11,9 +11,9 @@
 // @match             https://missav.ai/*
 // @match             https://missav.com/*
 // @match             https://thisav.com/*
-// @author            DonkeyBear, track no, mrhydra, iSwfe, ChinaGodMan
+// @author            DonkeyBear,track no,mrhydra,iSwfe,人民的勤务员 <china.qinwuyuan@gmail.com>
 // @license           MIT
-// @version           2025.12.04.MobileScaleFix
+// @version           2025.12.04.MobileFullWidth
 // ==/UserScript==
 
 const url = window.location.href
@@ -25,63 +25,83 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
     'use strict'
 
     const videoSettings = {
-        viewportFitCover: false, // 是否覆盖刘海区
+        // 🟢【核心修改】强制开启视口覆盖，解决手机端显示比例不对的问题
+        viewportFitCover: true, 
         playCtrlEnable: true,
         autoPauseDisable: 1,
         autoMutePlay: true,
-        defaultVolume: null, // 保持 null，不修改音量
+        defaultVolume: null,
     };
 
-    // 🟢【CSS 修复】手机端适配与画面完整显示
+    // 🟢【CSS 核心修复】核弹级常显 + 强制铺满屏幕
     GM_addStyle(`
         /* 1. 隐藏多余的绿色按钮栏 */
         div.flex.-mx-4.sm\\:m-0.mt-1.bg-black.justify-center {
             display: none !important;
         }
 
-        /* 2. 【关键修复】强制视频包含在容器内，不裁剪 */
-        video.player {
-            object-fit: contain !important;
-            width: 100% !important;
-            height: auto !important;
-            max-height: 85vh !important; /* 防止竖屏视频过高溢出 */
-        }
-        
-        /* 修复容器高度，允许自适应 */
-        .plyr__video-wrapper {
-            height: auto !important;
-            padding-bottom: 0 !important;
-            background: #000;
-        }
-        
-        /* 3. 修复视频区域边距，防止手机端溢出 */
-        #video {
-            margin-left: 0 !important;
-            margin-right: 0 !important;
-            width: 100% !important;
-        }
-
-        /* 4. 【非全屏】底部紧凑布局 */
+        /* 2. 【非全屏】底部挤出 40px 空间，形成"下巴" */
         .plyr:not(.plyr--fullscreen-active) {
-            padding-bottom: 0px !important;
+            padding-bottom: 40px !important;
             background-color: #000 !important;
         }
 
-        /* 5. 强制控制栏显示 */
-        .plyr__controls {
+        /* 3. 【非全屏】控件钉死在底部，背景全黑 */
+        .plyr:not(.plyr--fullscreen-active) .plyr__controls {
+            position: absolute !important;
+            bottom: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            height: 40px !important;
+            padding: 0 10px !important;
+            background: #090811 !important;
+            z-index: 99999 !important;
+        }
+
+        /* 4. 暴力禁止隐藏的核心代码 */
+        .plyr__controls,
+        .plyr--hide-controls .plyr__controls,
+        .plyr--video.plyr--hide-controls .plyr__controls,
+        .plyr--fullscreen-active .plyr__controls {
             opacity: 1 !important;
             visibility: visible !important;
             pointer-events: auto !important;
-            background: linear-gradient(to top, rgba(0,0,0,0.8), rgba(0,0,0,0));
-            z-index: 10000 !important;
+            transform: none !important;
+            display: flex !important;
+            transition: none !important;
         }
 
-        /* 6. 去除广告与杂项 */
+        /* 5. 调整视频高度 */
+        .plyr:not(.plyr--fullscreen-active) .plyr__video-wrapper {
+            height: 100% !important;
+            padding-bottom: 0 !important;
+        }
+
+        /* 6. 去除广告 */
         div[class*="lg:hidden"], div.ts-outstream-video, iframe {
             display: none !important;
         }
         div.my-2.text-sm.text-nord4.truncate {
             white-space: normal !important;
+        }
+
+        /* 🟢【新增】强制移动端容器 100% 宽度，去除左右边距 */
+        @media (max-width: 640px) {
+            body > div:nth-child(3) > div.sm\\:container {
+                width: 100vw !important;
+                max-width: 100vw !important;
+                padding-left: 0 !important;
+                padding-right: 0 !important;
+                margin-left: 0 !important;
+                margin-right: 0 !important;
+                overflow-x: hidden !important;
+            }
+            /* 修复视频容器可能的负边距导致的问题 */
+            #video {
+                margin-left: 0 !important;
+                margin-right: 0 !important;
+                width: 100% !important;
+            }
         }
     `);
 
@@ -90,10 +110,17 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
         meta.name = 'theme-color'
         meta.content = '#090811'
         document.querySelector('head').appendChild(meta)
-        if (videoSettings.viewportFitCover) {
-            var viewport = document.querySelector('head > meta[name=viewport]')
-            viewport.content = 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover'
+        
+        // 🟢【核心逻辑】强制注入手机端 Viewport 设置
+        // 即使配置没开，为了解决你的问题，这里也强制执行
+        var viewport = document.querySelector('head > meta[name=viewport]');
+        if (!viewport) {
+            viewport = document.createElement('meta');
+            viewport.name = 'viewport';
+            document.head.appendChild(viewport);
         }
+        // 强制设置为设备宽度，禁止缩放，解决“缩远”的问题
+        viewport.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover';
     })()
 
     var handle = () => {
@@ -101,14 +128,12 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
 
         var content = document.querySelector('body > div:nth-child(3) > div.sm\\:container > div > div.flex-1.order-first > div:first-child')
         var videoDiv = content.querySelector('div:first-child')
-        if (videoDiv) {
-            videoDiv.id = 'video'
-            // 🟢 修复：移除 tailwind 的负边距样式，改用 w-full
-            videoDiv.classList.value = 'relative w-full sm:m-0 mt-1'
-            videoDiv.style.cursor = 'pointer';
-        }
+        videoDiv.id = 'video'
+        // 修改样式类，确保满宽
+        videoDiv.classList.value = 'relative w-full mt-1' 
+        videoDiv.style.cursor = 'pointer';
 
-        // 自动播放逻辑 (仅处理静音启动，不强制修改音量数值)
+        // 自动播放逻辑
         if (videoSettings.autoMutePlay) {
             let autoPlayTimer = setInterval(() => {
                 const player = document.querySelector('video.player');
@@ -116,6 +141,7 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
                     player.muted = true;
                     player.playsInline = true;
                     player.play().then(() => {
+                        console.log("✅ 自动播放成功");
                         clearInterval(autoPlayTimer);
                     }).catch(e => {});
 
@@ -123,7 +149,6 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
                         const unmute = () => {
                             if (player.muted) {
                                 player.muted = false;
-                                // 这里移除了 player.volume 的强制赋值
                                 if (videoSettings.defaultVolume !== null) {
                                     player.volume = videoSettings.defaultVolume;
                                 }
@@ -139,9 +164,10 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
                     }
                 }
             }, 500);
-            setTimeout(() => clearInterval(autoPlayTimer), 8000);
+            setTimeout(() => clearInterval(autoPlayTimer), 10000);
         }
 
+        // 交互逻辑
         const player = document.querySelector('video.player');
         if (player) {
             player.addEventListener('seeked', () => {
@@ -149,22 +175,20 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
             });
 
             let isScrolling = false;
-            if(videoDiv) {
-                videoDiv.addEventListener('touchmove', () => { isScrolling = true; }, {passive: true});
-                videoDiv.addEventListener('touchstart', () => { isScrolling = false; }, {passive: true});
+            videoDiv.addEventListener('touchmove', () => { isScrolling = true; }, {passive: true});
+            videoDiv.addEventListener('touchstart', () => { isScrolling = false; }, {passive: true});
 
-                const togglePlay = (e) => {
-                    if (isScrolling) return;
-                    if (e.target.closest('button') || e.target.closest('a') || e.target.closest('.plyr__controls') || e.target.closest('input')) {
-                        return;
-                    }
-                    e.stopPropagation();
-                    if (player.paused) player.play(); else player.pause();
-                };
+            const togglePlay = (e) => {
+                if (isScrolling) return;
+                if (e.target.closest('button') || e.target.closest('a') || e.target.closest('.plyr__controls') || e.target.closest('input')) {
+                    return;
+                }
+                e.stopPropagation();
+                if (player.paused) player.play(); else player.pause();
+            };
 
-                videoDiv.addEventListener('touchend', togglePlay, { capture: true, passive: false });
-                videoDiv.addEventListener('click', togglePlay, { capture: true });
-            }
+            videoDiv.addEventListener('touchend', togglePlay, { capture: true, passive: false });
+            videoDiv.addEventListener('click', togglePlay, { capture: true });
 
             let windowIsBlurred
             window.onblur = () => { windowIsBlurred = true }
@@ -185,71 +209,4 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
             const actressesLink = link.href
             fetch(actressesLink).then(res => res.text()).then(html => {
                 const doc = new DOMParser().parseFromString(html, 'text/html')
-                const imgElement = doc.querySelector('.bg-norddark img')
-                const profile = doc.querySelector('.font-medium.text-lg.leading-6')
-                if (profile) {
-                    const saveBtn = profile.querySelector('div.hero-pattern button')
-                    if (saveBtn) saveBtn.remove()
-
-                    const profileDiv = document.createElement('div')
-                    profileDiv.className = 'ChinaGodMan-preview'
-                    Object.assign(profileDiv.style, {
-                        display: 'none', position: 'absolute', backgroundColor: 'rgba(0,0,0,0.8)',
-                        color: '#fff', padding: '10px', borderRadius: '5px', zIndex: '1000', whiteSpace: 'nowrap'
-                    });
-
-                    if (imgElement) {
-                        profileDiv.innerHTML = `<img src="${imgElement.src.replace('-t', '')}" style="max-height: 200px; max-width: 200px; display: block; margin-bottom: 5px;">`
-                        link.innerHTML = `<img src="${imgElement.src}" width="20" height="20" style="vertical-align: middle; margin-right: 4px;">` + link.innerText
-                    }
-                    profileDiv.appendChild(profile)
-                    link.parentElement.appendChild(profileDiv)
-
-                    link.addEventListener('mouseenter', () => {
-                        profileDiv.style.display = 'block'
-                        const rect = link.getBoundingClientRect()
-                        profileDiv.style.top = `${rect.bottom + window.scrollY}px`
-                        profileDiv.style.left = `${rect.left + window.scrollX}px`
-                    })
-                    link.addEventListener('mouseleave', () => { profileDiv.style.display = 'none' })
-                }
-            }).catch(() => {})
-        })
-    }
-
-    var trigger = () => {
-        return !!document.querySelector('body > div:nth-child(3) > div.sm\\:container > div > div.flex-1.order-first > div:first-child > div.relative')
-    }
-
-    var interval = setInterval(() => {
-        if (trigger()) {
-            clearInterval(interval)
-            handle()
-        }
-    }, 200)
-
-    setTimeout(() => clearInterval(interval), 10000)
-
-    function cleanupPage() {
-        document.querySelectorAll('iframe, div[class*="lg:hidden"], div.ts-outstream-video').forEach(el => el.remove());
-        const origin = window.location.origin
-        document.querySelectorAll('div.flex-1.min-w-0 h2').forEach(h2 => {
-            if (!h2.querySelector('a') && h2.innerText) {
-                const text = h2.innerText
-                h2.innerHTML = `<a href="${origin}/genres/${text}">${text}</a>`
-            }
-        })
-    }
-
-    unsafeWindow.open = () => { }
-
-    document.addEventListener('DOMContentLoaded', () => {
-        const observer = new MutationObserver(() => cleanupPage())
-        observer.observe(document, { childList: true, subtree: true })
-    })
-
-    document.addEventListener('ready', () => {
-        const showMore = document.querySelector('a.text-nord13.font-medium.flex.items-center')
-        if (showMore) showMore.click()
-    })
-})()
+                const imgElement = doc.querySelector('.bg-
