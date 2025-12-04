@@ -13,7 +13,7 @@
 // @match             https://thisav.com/*
 // @author            DonkeyBear,track no,mrhydra,iSwfe,人民的勤务员 <china.qinwuyuan@gmail.com>
 // @license           MIT
-// @version           2025.12.04.FinalClean
+// @version           2025.12.04.PureClean
 // ==/UserScript==
 
 const url = window.location.href
@@ -26,18 +26,18 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
 
     const videoSettings = {
         viewportFitCover: false, 
-        playCtrlEnable: true,    
         autoPauseDisable: 1,     
         autoMutePlay: true,      
-        // 🟢【修改】音量策略：代码里已改为"自动判断"，此处配置仅作备用
         defaultVolume: 1.0,     
     };
 
     // 🟢【CSS 布局与清理】
     GM_addStyle(`
-        /* 1. 隐藏多余的绿色按钮栏、以及你提到的循环控制条(Loop) */
-        div.flex.-mx-4.sm\\:m-0.mt-1.bg-black.justify-center, /* 绿色按钮栏 */
-        div[class*="items-center"][class*="justify-between"] > button:last-child /* 尝试通过CSS隐藏Loop栏(辅助) */
+        /* 1. 隐藏多余的绿色按钮栏、以及底部的 Loop 循环控制条 */
+        div.flex.-mx-4.sm\\:m-0.mt-1.bg-black.justify-center, 
+        div[class*="items-center"][class*="justify-between"] > button:last-child,
+        div[x-data*="loop"], /* 针对 Loop 条的特定隐藏 */
+        #loop-control-bar    /* 假设ID隐藏 */
         {
             display: none !important;
         }
@@ -128,8 +128,7 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
                                 player.muted = false;
                                 console.log("🔊 当前音量:", player.volume);
                                 
-                                // 🔥【逻辑核心】如果音量太小(小于5%)，说明没有记忆或默认静音，强制拉到 100%
-                                // 否则，保留播放器自己记忆的音量
+                                // 智能音量：如果音量过小则拉满，否则记忆
                                 if (player.volume < 0.05) {
                                     player.volume = 1.0; 
                                     console.log("🔊 音量过小，已强制设置为 100%");
@@ -151,12 +150,7 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
             setTimeout(() => clearInterval(autoPlayTimer), 10000);
         }
 
-        // 一键回看按钮
-        if (videoSettings.playCtrlEnable) {
-            var div = document.createElement('div')
-            div.innerHTML = '<button id="btnControl" onclick="video.scrollIntoView();" type="button" class="relative inline-flex items-center rounded-md bg-transparent pl-2 pr-2 py-2 font-medium text-white hover:bg-primary focus:z-10" style="position: fixed; top: 50%; right: 10px; transform: translateY(-50%); z-index: 1000; opacity: 1; background-color: transparent; border: 1px solid white; border-radius: 8px;border: none;width: 40px; height: 40px;">🔁</button>'
-            document.body.appendChild(div)
-        }
+        // ❌【已删除】这里原本是生成悬浮按钮的代码，现在已经删除了
 
         // 交互逻辑
         const player = document.querySelector('video.player');
@@ -171,6 +165,7 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
 
             const togglePlay = (e) => {
                 if (isScrolling) return;
+                // 防止点击到底部的控制条
                 if (e.target.closest('button') || e.target.closest('a') || e.target.closest('.plyr__controls') || e.target.closest('input')) {
                     return;
                 }
@@ -242,9 +237,15 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
                 const container = btn.closest('.flex.items-center.justify-between') || btn.closest('div[class*="bg-black"]');
                 if (container) {
                     container.style.display = 'none';
-                    // console.log("已隐藏 Loop 控制条");
                 }
             }
+        });
+        
+        // 针对你图片中的结构进行额外清理
+        const inputs = document.querySelectorAll('input[placeholder="00:00:00"]');
+        inputs.forEach(input => {
+             const parentBar = input.closest('.flex') || input.parentElement.parentElement;
+             if(parentBar) parentBar.style.display = 'none';
         });
     }
 
