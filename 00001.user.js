@@ -195,19 +195,37 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
         span.innerHTML = '<button id="btnPlay" onclick="player.togglePlay();" type="button" class="relative -ml-px inline-flex items-center rounded-md bg-transparent pl-2 pr-2 py-2 font-medium text-white ring-1 ring-inset ring-white hover:bg-primary focus:z-10">' + videoSettings.htmlPlay + '</button>'
         bar.insertBefore(span, bar.lastElementChild)
 
-// 自动禁音播放逻辑修正
-        // 1. 根据顶部的设置决定是否静音
-        player.muted = videoSettings.autoMutePlay;
-
-        // 2. 无论是否静音，都强制尝试播放
+// 【强力有声自动播放 - Mac/iOS 专用修复版】
+        // 1. 先静音，骗过浏览器的自动播放检测
+        player.muted = true;
+        
+        // 2. 执行播放
         var playPromise = player.play();
 
-        // 3. 捕捉浏览器可能产生的“禁止自动播放”报错，防止脚本卡死
+        // 3. 播放成功后的瞬间，把声音打开
         if (playPromise !== undefined) {
-            playPromise.catch(error => {
-                console.log("自动播放被浏览器拦截，请检查浏览器网站设置权限。");
+            playPromise.then(_ => {
+                // 延迟 100 毫秒开启声音，防止 Mac 检测到“起播即有声”而拦截
+                setTimeout(() => {
+                    player.muted = false;
+                    player.volume = 1.0; // 确保音量不是0
+                }, 100);
+            }).catch(error => {
+                // 如果还是失败，启用备用方案：不断尝试直到播放
+                console.log("播放启动受阻，尝试强制激活...");
+                var forceInterval = setInterval(() => {
+                    if (player.paused) {
+                        player.muted = true;
+                        player.play();
+                    } else {
+                        player.muted = false;
+                        clearInterval(forceInterval);
+                    }
+                }, 200);
             });
         }
+
+        
 
 
         // 【视频控制条】播放/暂停时，变化播放按钮形态
