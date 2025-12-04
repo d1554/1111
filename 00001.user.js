@@ -150,9 +150,9 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
 
     var handle = () => {
         console.log('【视频控制条增强】开始...')
-        // 【页面内容区域】获取元素
+        // 【页面内容区域】获取主容器
         var content = document.querySelector('body > div:nth-child(3) > div.sm\\:container > div > div.flex-1.order-first > div:first-child')
-        // 【视频区域】样式调整
+        // 【视频区域】
         var video = content.querySelector('div:first-child')
         video.id = 'video'
         video.classList.value = 'relative -mx-4 sm:m-0 mt-1'
@@ -160,25 +160,69 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
 
         // 【视频区域】设备横屏时自动锚点到视频
         window.addEventListener('orientationchange', () => { setTimeout(() => document.querySelector('#video').scrollIntoView(), 400) })
-        // 【视频控制条】获取元素
-        var bar = video.nextElementSibling
-        // 一键回到播放器
+        
+        // -----------------------------------------------------
+        // 【UI 布局修改】
+        // 不再劫持原来的 bar，而是创建一个新的独立控制栏
+        // -----------------------------------------------------
+        var newControlBar = document.createElement('div');
+        newControlBar.id = 'missav-custom-controls';
+        // 样式：黑色背景，居中，有些许内边距，确保在标题上方
+        newControlBar.className = 'flex justify-center items-center bg-black py-2 my-1 rounded'; 
+        newControlBar.style.width = '100%';
+        newControlBar.style.zIndex = '999';
+
+        // 将新控制栏插入到视频元素(video)的后面，标题的前面
+        video.after(newControlBar);
+
+        // 一键回到播放器 (保持原有逻辑)
         if (videoSettings.playCtrlEnable) {
             var div = document.createElement('div')
             div.innerHTML = '<button id="btnControl" onclick="video.scrollIntoView();" type="button" class="relative inline-flex items-center rounded-md bg-transparent pl-2 pr-2 py-2 font-medium text-white hover:bg-primary focus:z-10" style="position: fixed; top: 50%; right: 10px; transform: translateY(-50%); z-index: 1000; opacity: 1; background-color: transparent; border: 1px solid white; border-radius: 8px;border: none;width: 40px; height: 40px;">🔁</button>'
             document.body.appendChild(div)
         }
-        // 【视频控制条】显示
-        bar.classList.remove('sm:hidden')
-        // 【视频控制条】样式调整
-        bar.classList.value = 'flex -mx-4 sm:m-0 mt-1 bg-black justify-center'
-        // 【视频控制条】加入播放/暂停按钮
-        var span = document.createElement('span')
+
+        // --- 构建按钮 (快退) ---
+        var leftSpan = document.createElement('span');
+        leftSpan.classList.value = 'isolate inline-flex rounded-md shadow-sm';
+        leftSpan.style = `margin: 0 ${videoSettings.buttonMargin}`;
+        leftSpan.innerHTML = `<button type="button" class="relative inline-flex items-center rounded-l-md bg-transparent pl-2 pr-2 py-2 text-sm font-medium text-white ring-1 ring-inset ring-white hover:bg-primary focus:z-10">⏪ ${minute}m</button>
+                              <button type="button" class="relative -ml-px inline-flex items-center bg-transparent pl-2 pr-2 py-2 text-sm font-medium text-white ring-1 ring-inset ring-white hover:bg-primary focus:z-10">⏪ 1m</button>
+                              <button type="button" class="relative -ml-px inline-flex items-center rounded-r-md bg-transparent pl-2 pr-2 py-2 text-sm font-medium text-white ring-1 ring-inset ring-white hover:bg-primary focus:z-10">⏪ 10s</button>`;
+        newControlBar.appendChild(leftSpan);
+
+        // --- 构建按钮 (播放/暂停) ---
         var player = document.querySelector('video.player')
-        span.classList.value = 'isolate inline-flex rounded-md shadow-sm'
-        span.style = `margin: 0 ${videoSettings.buttonMargin}`
-        span.innerHTML = '<button id="btnPlay" onclick="player.togglePlay();" type="button" class="relative -ml-px inline-flex items-center rounded-md bg-transparent pl-2 pr-2 py-2 font-medium text-white ring-1 ring-inset ring-white hover:bg-primary focus:z-10">' + videoSettings.htmlPlay + '</button>'
-        bar.insertBefore(span, bar.lastElementChild)
+        var playSpan = document.createElement('span')
+        playSpan.classList.value = 'isolate inline-flex rounded-md shadow-sm'
+        playSpan.style = `margin: 0 ${videoSettings.buttonMargin}`
+        playSpan.innerHTML = '<button id="btnPlay" onclick="player.togglePlay();" type="button" class="relative -ml-px inline-flex items-center rounded-md bg-transparent pl-2 pr-2 py-2 font-medium text-white ring-1 ring-inset ring-white hover:bg-primary focus:z-10">' + videoSettings.htmlPlay + '</button>'
+        newControlBar.appendChild(playSpan);
+
+        // --- 构建按钮 (快进) ---
+        var rightSpan = document.createElement('span');
+        rightSpan.classList.value = 'isolate inline-flex rounded-md shadow-sm';
+        rightSpan.style = `margin: 0 ${videoSettings.buttonMargin}`;
+        rightSpan.innerHTML = `<button type="button" class="relative inline-flex items-center rounded-l-md bg-transparent pl-2 pr-2 py-2 text-sm font-medium text-white ring-1 ring-inset ring-white hover:bg-primary focus:z-10">10s ⏩</button>
+                               <button type="button" class="relative -ml-px inline-flex items-center bg-transparent pl-2 pr-2 py-2 text-sm font-medium text-white ring-1 ring-inset ring-white hover:bg-primary focus:z-10">1m ⏩</button>
+                               <button type="button" class="relative -ml-px inline-flex items-center rounded-r-md bg-transparent pl-2 pr-2 py-2 text-sm font-medium text-white ring-1 ring-inset ring-white hover:bg-primary focus:z-10">${minute}m ⏩</button>`;
+        newControlBar.appendChild(rightSpan);
+
+        // 绑定按钮事件 (快退/快进)
+        const bindEvents = () => {
+             // 左侧按钮组 (快退)
+             const leftBtns = leftSpan.querySelectorAll('button');
+             leftBtns[0].onclick = () => { player.currentTime -= videoSettings.maxDuration };
+             leftBtns[1].onclick = () => { player.currentTime -= 60 };
+             leftBtns[2].onclick = () => { player.currentTime -= 10 };
+
+             // 右侧按钮组 (快进)
+             const rightBtns = rightSpan.querySelectorAll('button');
+             rightBtns[0].onclick = () => { player.currentTime += 10 };
+             rightBtns[1].onclick = () => { player.currentTime += 60 };
+             rightBtns[2].onclick = () => { player.currentTime += videoSettings.maxDuration };
+        };
+        bindEvents();
 
         // ==========================================
         // 【1. 全平台无死角解除静音】
@@ -205,7 +249,6 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
         // 【2. 进度条拖拽优化：松手后强制自动播放】
         // ==========================================
         player.addEventListener('seeked', () => {
-             // 只要发生跳转，就强制尝试播放，解决拖拽后暂停的问题
              if (player.paused) {
                  console.log("⏩ 进度条拖动结束 -> 自动继续播放");
                  player.play().catch(e => console.log("自动续播被阻拦:", e));
@@ -219,7 +262,6 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
         video.addEventListener('touchmove', () => { isScrolling = true; }, {passive: true});
         video.addEventListener('touchstart', () => { isScrolling = false; }, {passive: true});
 
-        // 核心：使用 capture: true 在播放器收到事件之前拦截它
         video.addEventListener('touchend', (e) => {
             if (isScrolling) return;
 
@@ -240,7 +282,6 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
             }
         }, { capture: true, passive: false });
 
-        // PC 端点击逻辑
         video.addEventListener('click', (e) => {
             if (e.target.closest('button') || e.target.closest('a') || e.target.closest('.plyr__controls') || e.target.closest('input')) return;
             e.stopPropagation();
@@ -262,17 +303,6 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
             } else { document.querySelector('#btnPlay').innerHTML = videoSettings.htmlPlay }
         }
 
-        // 【视频控制条】修改时间跨度按钮
-        if (videoSettings.durationBtnEnable) {
-            var leftBtn = bar.querySelector('span:first-child > button:first-child')
-            var rightBtn = bar.querySelector('span:last-child > button:last-child')
-            leftBtn.removeAttribute('@click.prevent')
-            leftBtn.onclick = () => { player.currentTime -= videoSettings.maxDuration }
-            leftBtn.innerHTML = leftBtn.innerHTML.replace('10m', `${minute}m`)
-            rightBtn.removeAttribute('@click.prevent')
-            rightBtn.onclick = () => { player.currentTime += videoSettings.maxDuration }
-            rightBtn.innerHTML = rightBtn.innerHTML.replace('10m', `${minute}m`)
-        }
         const links = document.querySelectorAll('.space-y-2 > div:nth-child(4) a')
 
         links.forEach(link => {
