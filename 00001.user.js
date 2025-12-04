@@ -43,7 +43,6 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
 }
 (() => {
     'use strict'
-    const minute = 5 // 最大快进分钟数
     const videoSettings = {
         // 【开关】背景色覆盖iPhone非安全区
         viewportFitCover: false,
@@ -68,9 +67,9 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
 
     var handle = () => {
         console.log('【视频控制条增强】开始...')
-        // 【页面内容区域】获取元素
+        // 【页面内容区域】
         var content = document.querySelector('body > div:nth-child(3) > div.sm\\:container > div > div.flex-1.order-first > div:first-child')
-        // 【视频区域】样式调整
+        // 【视频区域】
         var video = content.querySelector('div:first-child')
         video.id = 'video'
         video.classList.value = 'relative -mx-4 sm:m-0 mt-1'
@@ -78,14 +77,27 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
         // 设置鼠标手势为点击状，提示可点击
         video.style.cursor = 'pointer';
 
-        // 【视频区域】设备横屏时自动锚点到视频
+        // 设备横屏时自动锚点到视频
         window.addEventListener('orientationchange', () => { setTimeout(() => document.querySelector('#video').scrollIntoView(), 400) })
         
         // 获取播放器实例
         var player = document.querySelector('video.player')
 
-        // ⚠️⚠️⚠️ 关键修改：彻底删除了 bar.classList.remove('sm:hidden') 和所有按钮生成代码 ⚠️⚠️⚠️
-        // 这意味着脚本不会在页面上显示任何东西
+        // ==========================================
+        // 【清理残留UI：强制删除之前的按钮】
+        // ==========================================
+        // 检查是否已经存在之前的自定义控制栏，如果有，直接删掉
+        var oldCustomBar = document.getElementById('missav-custom-controls');
+        if (oldCustomBar) {
+            oldCustomBar.remove();
+            console.log("🧹 已清理残留的旧版控制栏");
+        }
+        // 检查是否在原生bar里插入了按钮，如果有，清理掉
+        var bar = video.nextElementSibling;
+        if (bar) {
+            var insertedButtons = bar.querySelectorAll('span.isolate.inline-flex.rounded-md.shadow-sm');
+            insertedButtons.forEach(btn => btn.remove());
+        }
 
         // ==========================================
         // 【1. 全平台无死角解除静音】
