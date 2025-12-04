@@ -195,12 +195,21 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
         span.innerHTML = '<button id="btnPlay" onclick="player.togglePlay();" type="button" class="relative -ml-px inline-flex items-center rounded-md bg-transparent pl-2 pr-2 py-2 font-medium text-white ring-1 ring-inset ring-white hover:bg-primary focus:z-10">' + videoSettings.htmlPlay + '</button>'
         bar.insertBefore(span, bar.lastElementChild)
 
-        // 自动禁音播放
-        if (videoSettings.autoMutePlay) {
-            player.muted = true
-            player.play()
+// 自动禁音播放逻辑修正
+        // 1. 根据顶部的设置决定是否静音
+        player.muted = videoSettings.autoMutePlay;
 
+        // 2. 无论是否静音，都强制尝试播放
+        var playPromise = player.play();
+
+        // 3. 捕捉浏览器可能产生的“禁止自动播放”报错，防止脚本卡死
+        if (playPromise !== undefined) {
+            playPromise.catch(error => {
+                console.log("自动播放被浏览器拦截，请检查浏览器网站设置权限。");
+            });
         }
+
+
         // 【视频控制条】播放/暂停时，变化播放按钮形态
         player.onplay = () => { document.querySelector('#btnPlay').innerHTML = videoSettings.htmlPause }
 
