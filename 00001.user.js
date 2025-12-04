@@ -131,7 +131,7 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
         maxDuration: 60 * minute,
         // 后台禁止自动暂停模式
         autoPauseDisable: 1, // 0:默认模式(浏览器同一组标签,播放页面切换到另外标签暂停播放), 1:禁止所有暂停播放,切换到同一组标签不暂停播放
-        // 自动静音播放 (必须为 true)
+        // 自动静音播放 (保持 true)
         autoMutePlay: true
     };
 
@@ -179,33 +179,45 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
         bar.insertBefore(span, bar.lastElementChild)
 
         // ==========================================
-        // 【Mac/iOS 终极修复：感应式有声播放】
+        // 【全平台无死角解除静音 - 增强版】
         // ==========================================
         if (videoSettings.autoMutePlay) {
-            // 1. 强制静音启动（这是底线，保证视频会动）
+            // 1. 强制静音启动，保证视频画面动起来
             player.muted = true;
             player.play().catch(e => console.error("静音启动失败:", e));
 
-            // 2. 只有当用户真的动了鼠标或碰了屏幕，才开声音
-            // 这样 100% 不会被浏览器拦截
-            var hasUnmuted = false;
-            var enableSound = () => {
-                if (hasUnmuted) return;
-                
-                console.log("👆 检测到交互，正在开启声音...");
+            // 2. 定义解除静音函数
+            var aggressiveUnmute = (e) => {
+                // 如果已经有声音了，就无需再执行，节省性能
+                if (!player.muted) return;
+
+                console.log(`👆 检测到用户操作 (${e.type}) -> 立即解除静音!`);
                 player.muted = false;
                 player.volume = 1.0;
-                hasUnmuted = true;
                 
-                // 移除所有监听器，节省资源
-                ['click', 'touchstart', 'mousemove', 'keydown', 'scroll'].forEach(evt => {
-                    document.removeEventListener(evt, enableSound, true);
-                });
+                // 再次确认：如果解除失败，强制重试
+                if (player.muted) {
+                    player.muted = false;
+                }
             };
 
-            // 监听所有可能的用户行为
-            ['click', 'touchstart', 'mousemove', 'keydown', 'scroll'].forEach(evt => {
-                document.addEventListener(evt, enableSound, { capture: true, once: true });
+            // 3. 监听所有可能的用户交互事件
+            // 包括：点击、触摸开始/移动/结束、鼠标按下/松开、滚轮、按键
+            // 只要你在这个网页上做任何事，都会触发
+            const eventTypes = [
+                'click', 'mousedown', 'mouseup', 'mousemove', 'wheel',
+                'touchstart', 'touchend', 'touchmove', 'pointerdown',
+                'keydown', 'keypress', 'scroll'
+            ];
+
+            // 4. 使用 Capture 模式 (true) 确保在事件被其他元素拦截前捕获它
+            eventTypes.forEach(evt => {
+                document.addEventListener(evt, aggressiveUnmute, { capture: true });
+            });
+            
+            // 5. 专门针对播放器区域再加一层监听 (防止播放器UI拦截事件)
+            eventTypes.forEach(evt => {
+                player.addEventListener(evt, aggressiveUnmute, { capture: true });
             });
         }
         // ==========================================
