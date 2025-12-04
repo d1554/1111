@@ -156,6 +156,10 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
         var video = content.querySelector('div:first-child')
         video.id = 'video'
         video.classList.value = 'relative -mx-4 sm:m-0 mt-1'
+        
+        // 【新增功能】设置鼠标手势为点击状，提示可点击
+        video.style.cursor = 'pointer';
+
         // 【视频区域】设备横屏时自动锚点到视频
         window.addEventListener('orientationchange', () => { setTimeout(() => document.querySelector('#video').scrollIntoView(), 400) })
         // 【视频控制条】获取元素
@@ -179,48 +183,48 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
         bar.insertBefore(span, bar.lastElementChild)
 
         // ==========================================
-        // 【全平台无死角解除静音 - 增强版】
+        // 【1. 全平台无死角解除静音】
         // ==========================================
         if (videoSettings.autoMutePlay) {
-            // 1. 强制静音启动，保证视频画面动起来
+            // 强制静音启动
             player.muted = true;
             player.play().catch(e => console.error("静音启动失败:", e));
 
-            // 2. 定义解除静音函数
+            // 监听所有交互以解除静音
             var aggressiveUnmute = (e) => {
-                // 如果已经有声音了，就无需再执行，节省性能
                 if (!player.muted) return;
-
-                console.log(`👆 检测到用户操作 (${e.type}) -> 立即解除静音!`);
+                console.log(`👆 检测到交互 (${e.type}) -> 解除静音`);
                 player.muted = false;
                 player.volume = 1.0;
-                
-                // 再次确认：如果解除失败，强制重试
-                if (player.muted) {
-                    player.muted = false;
-                }
+                if (player.muted) player.muted = false; // 双重保险
             };
-
-            // 3. 监听所有可能的用户交互事件
-            // 包括：点击、触摸开始/移动/结束、鼠标按下/松开、滚轮、按键
-            // 只要你在这个网页上做任何事，都会触发
-            const eventTypes = [
-                'click', 'mousedown', 'mouseup', 'mousemove', 'wheel',
-                'touchstart', 'touchend', 'touchmove', 'pointerdown',
-                'keydown', 'keypress', 'scroll'
-            ];
-
-            // 4. 使用 Capture 模式 (true) 确保在事件被其他元素拦截前捕获它
+            const eventTypes = ['click', 'mousedown', 'mouseup', 'mousemove', 'wheel', 'touchstart', 'touchend', 'touchmove', 'pointerdown', 'keydown', 'scroll'];
             eventTypes.forEach(evt => {
                 document.addEventListener(evt, aggressiveUnmute, { capture: true });
-            });
-            
-            // 5. 专门针对播放器区域再加一层监听 (防止播放器UI拦截事件)
-            eventTypes.forEach(evt => {
                 player.addEventListener(evt, aggressiveUnmute, { capture: true });
             });
         }
+
         // ==========================================
+        // 【2. 点击画面 播放/暂停 (修复点击无效问题)】
+        // ==========================================
+        video.addEventListener('click', (e) => {
+            // 如果点击的是下方的控制按钮，或者是链接，则忽略
+            // 防止点击“播放”按钮时触发两次（导致播放又立马暂停）
+            if (e.target.closest('button') || e.target.closest('a') || e.target.closest('.plyr__controls')) {
+                return;
+            }
+
+            console.log("👆 点击了视频区域 -> 切换播放状态");
+            // 阻止冒泡，防止被其他广告层捕获
+            e.stopPropagation(); 
+            
+            if (player.paused) {
+                player.play();
+            } else {
+                player.pause();
+            }
+        });
 
         // 【视频控制条】播放/暂停时，变化播放按钮形态
         player.onplay = () => { document.querySelector('#btnPlay').innerHTML = videoSettings.htmlPause }
