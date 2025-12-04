@@ -25,11 +25,11 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
     'use strict'
 
     const videoSettings = {
-        viewportFitCover: false, 
-        playCtrlEnable: true,    
-        autoPauseDisable: 1,     
-        autoMutePlay: true,      
-        defaultVolume: null,     
+        viewportFitCover: false,
+        playCtrlEnable: true,
+        autoPauseDisable: 1,
+        autoMutePlay: true,
+        defaultVolume: null,
     };
 
     // 🟢【CSS 核心修复】核弹级常显
@@ -41,7 +41,7 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
 
         /* 2. 【非全屏】底部挤出 40px 空间，形成"下巴" */
         .plyr:not(.plyr--fullscreen-active) {
-            padding-bottom: 40px !important; 
+            padding-bottom: 40px !important;
             background-color: #000 !important;
         }
 
@@ -59,7 +59,7 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
 
         /* 🔥🔥🔥 4. 暴力禁止隐藏的核心代码 🔥🔥🔥 */
         /* 无论播放器处于什么状态(播放中、暂停、鼠标移出)，都强制不透明 */
-        .plyr__controls, 
+        .plyr__controls,
         .plyr--hide-controls .plyr__controls,
         .plyr--video.plyr--hide-controls .plyr__controls,
         .plyr--fullscreen-active .plyr__controls {
@@ -81,7 +81,7 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
         div[class*="lg:hidden"], div.ts-outstream-video, iframe {
             display: none !important;
         }
-        div.my-2.text-sm.text-nord4.truncate { 
+        div.my-2.text-sm.text-nord4.truncate {
             white-space: normal !important;
         }
     `);
@@ -99,11 +99,11 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
 
     var handle = () => {
         console.log('【MissAV助手】初始化...')
-        
+
         var content = document.querySelector('body > div:nth-child(3) > div.sm\\:container > div > div.flex-1.order-first > div:first-child')
         var videoDiv = content.querySelector('div:first-child')
         videoDiv.id = 'video'
-        videoDiv.classList.value = 'relative -mx-4 sm:m-0 mt-1' 
+        videoDiv.classList.value = 'relative -mx-4 sm:m-0 mt-1'
         videoDiv.style.cursor = 'pointer';
 
         // 自动播放逻辑
@@ -126,11 +126,11 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
                                     player.volume = videoSettings.defaultVolume;
                                 }
                             }
-                            ['click', 'touchstart', 'keydown'].forEach(evt => 
+                            ['click', 'touchstart', 'keydown'].forEach(evt =>
                                 document.removeEventListener(evt, unmute, { capture: true })
                             );
                         };
-                        ['click', 'touchstart', 'keydown'].forEach(evt => 
+                        ['click', 'touchstart', 'keydown'].forEach(evt =>
                             document.addEventListener(evt, unmute, { capture: true })
                         );
                         player.setAttribute('data-unmute-listener', 'true');
@@ -140,12 +140,7 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
             setTimeout(() => clearInterval(autoPlayTimer), 10000);
         }
 
-        // 一键回看
-        if (videoSettings.playCtrlEnable) {
-            var div = document.createElement('div')
-            div.innerHTML = '<button id="btnControl" onclick="video.scrollIntoView();" type="button" class="relative inline-flex items-center rounded-md bg-transparent pl-2 pr-2 py-2 font-medium text-white hover:bg-primary focus:z-10" style="position: fixed; top: 50%; right: 10px; transform: translateY(-50%); z-index: 1000; opacity: 1; background-color: transparent; border: 1px solid white; border-radius: 8px;border: none;width: 40px; height: 40px;">🔁</button>'
-            document.body.appendChild(div)
-        }
+
 
         // 交互逻辑
         const player = document.querySelector('video.player');
@@ -153,7 +148,7 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
             player.addEventListener('seeked', () => {
                  if (player.paused) player.play().catch(() => {});
             });
-            
+
             let isScrolling = false;
             videoDiv.addEventListener('touchmove', () => { isScrolling = true; }, {passive: true});
             videoDiv.addEventListener('touchstart', () => { isScrolling = false; }, {passive: true});
@@ -179,7 +174,7 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
                 }
             }
         }
-        
+
         loadActressInfo();
     }
 
@@ -194,7 +189,7 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
                 if (profile) {
                     const saveBtn = profile.querySelector('div.hero-pattern button')
                     if (saveBtn) saveBtn.remove()
-                    
+
                     const profileDiv = document.createElement('div')
                     profileDiv.className = 'ChinaGodMan-preview'
                     Object.assign(profileDiv.style, {
@@ -224,14 +219,14 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
     var trigger = () => {
         return !!document.querySelector('body > div:nth-child(3) > div.sm\\:container > div > div.flex-1.order-first > div:first-child > div.relative')
     }
-    
+
     var interval = setInterval(() => {
         if (trigger()) {
             clearInterval(interval)
             handle()
         }
     }, 200)
-    
+
     setTimeout(() => clearInterval(interval), 10000)
 
     function cleanupPage() {
