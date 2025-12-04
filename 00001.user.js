@@ -1,85 +1,14 @@
 // ==UserScript==
 // @name              MissAV Enhanced Assistant
 // @name              MissAV Enhancer
-// @name:ar           مساعد Missav المحسّن
-// @name:bg           Missav подобрен асистент
-// @name:cs           Asistentka Missav Enhanced
-// @name:da           Missav forbedret assistent
-// @name:de           Missav Enhanced Assistant
-// @name:el           Missav ενισχυμένο βοηθό
-// @name:en           MissAV Enhanced Assistant
-// @name:eo           Missav Enhanced Assistant
-// @name:es           Asistente mejorado de Missav
-// @name:fi           Missav -parantunut avustaja
-// @name:fr           Assistant amélioré de Missav
-// @name:fr-CA        Assistant amélioré de Missav
-// @name:he           Missav Enhanced Assistant
-// @name:hr           Missav poboljšani pomoćnik
-// @name:hu           Missav továbbfejlesztett asszisztens
-// @name:id           MISSAV Enhanced Assistant
-// @name:it           MISSAV Assistente miglioramento
-// @name:ja           Missav Enhanced Assistant
-// @name:ka           მისავის გაძლიერებული ასისტენტი
-// @name:ko           Missav 강조 보조원
-// @name:nb           Missav forbedret assistent
-// @name:nl           Missav verbeterde assistent
-// @name:pl           Asystent wzmacniający Missav
-// @name:pt-BR        Assistente Missav Enhanced
-// @name:ro           Asistent îmbunătățit Missv
-// @name:ru           Missav Enhanced Assistant
-// @name:sk           Missav vylepšená asistentka
-// @name:sr           Појачани помоћник Мисав
-// @name:sv           Missav Enhanced Assistant
-// @name:th           Missav Enhanced Assistant
-// @name:tr           Missav geliştirilmiş asistan
-// @name:ug           Missav Evenced ياردەمچىسى
-// @name:uk           Missav посилений помічник
-// @name:vi           Trợ lý nâng cao Missav
-// @name:zh           MissAV 增强小助手
-// @name:zh-CN        MissAV 增强小助手
-// @name:zh-HK        MissAV 增強小助手
-// @name:zh-SG        MissAV 增强小助手
-// @name:zh-TW        MissAV 增強小助手
-// @description:ar    إزالة الإعلانات |
-// @description:bg    Премахване на реклами |
-// @description:cs    Odebrat reklamy |.
-// @description:da    Fjern annoncer |.
-// @description:de    Ads | Backstage spielen |
-// @description:el    Κατάργηση διαφημίσεων |
-// @description:en    Remove ads | Backstage play | Autoplay | Custom fast forward time | Full title | More features...
-// @description:eo    Forigu reklamojn |
-// @description:es    Eliminar los anuncios |
-// @description:fi    Poista mainokset |
-// @description        Remove ads | Background play | Auto play | Custom fast-forward time | Full title | More
-// @description:fr    Supprimez les publicités |
-// @description:fr-CA Supprimez les publicités |
-// @description:he    הסר את המודעות |
-// @description:hr    Uklonite se |
-// @description:hu    A hirdetések eltávolítása |
-// @description:id    Hapus Iklan |
-// @description:it    Rimuovi ADS |.
-// @description:ja    広告|
-// @description:ka    რეკლამები |
-// @description:ko    광고를 제거합니다.
-// @description:nb    Fjern annonser |.
-// @description:nl    Advertenties verwijderen | Backstage Play |
-// @description:pl    Usuń zagranie za kulisami |
-// @description:pt-BR Remover anúncios |
-// @description:ro    Îndepărtați reclame |
-// @description:ru    Удалить объявление |.
-// @description:sk    Odstráňte
-// @description:sr    Уклоните огласе | БацкСтаге Плаи | Аутоматска репродукција | Цустом Брзо прослеђивање времена | пуни наслов | Још функција ...
-// @description:sv    Ta bort annonser |
-// @description:th    ลบโฆษณา
-// @description:tr    Reklamlar |
-// @description:ug    ئېلانلارنى ئۆچۈرۈڭ | ئارقا ئويۇن | AutoPlay | ئىختىيارىي بۇرۇن | تولۇق ماۋزۇ | تولۇق ماۋزۇ | تېخىمۇ كۆپ ئىقتىدارلار ...
-// @description:uk    Видаліть рекламу |
-// @description:vi    Xóa quảng cáo |.
-// @description:zh    去除广告|后台播放|自动播放|自定义快进时间|完整标题|更多功能...
-// @description:zh-CN 去除广告|后台播放|自动播放|自定义快进时间|完整标题|更多功能...
-// @description:zh-HK 去除廣告|後台播放|自動播放|自定義快進時間|完整標題|更多功能...
-// @description:zh-SG 去除广告|后台播放|自动播放|自定义快进时间|完整标题|更多功能...
-// @description:zh-TW 去除廣告|後台播放|自動播放|自定義快進時間|完整標題|更多功能...
+// @name:zh           MissAV 增强小助手 (纯净后台版)
+// @name:zh-CN        MissAV 增强小助手 (纯净后台版)
+// @name:zh-HK        MissAV 增強小助手 (純淨後台版)
+// @name:zh-TW        MissAV 增強小助手 (純淨後台版)
+// @description:zh    只有功能没有按钮：去除广告|后台播放|自动播放|自定义快进时间|完整标题|更多功能...
+// @description:zh-CN 只有功能没有按钮：去除广告|后台播放|自动播放|自定义快进时间|完整标题|更多功能...
+// @description:zh-HK 只有功能沒有按鈕：去除廣告|後台播放|自動播放|自定義快進時間|完整標題|更多功能...
+// @description:zh-TW 只有功能沒有按鈕：去除廣告|後台播放|自動播放|自定義快進時間|完整標題|更多功能...
 // @run-at            document-start
 // @grant             unsafeWindow
 // @grant             GM_addStyle
@@ -118,30 +47,19 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
     const videoSettings = {
         // 【开关】背景色覆盖iPhone非安全区
         viewportFitCover: false,
-        //播放页面显示一键回到播放器
-        playCtrlEnable: true,
-        // 视频控制条按钮间距
-        buttonMargin: '.1rem',
-        // 播放/暂停按钮的HTML样式
-        htmlPlay: '▶️',
-        htmlPause: '⏸️',
-        // 【开关】修改时间跨度值按钮 (已关闭，移除快进快退按钮)
-        durationBtnEnable: false, 
-        // 最长快进/快退时间跨度值
-        maxDuration: 60 * minute,
         // 后台禁止自动暂停模式
-        autoPauseDisable: 1, // 0:默认模式(浏览器同一组标签,播放页面切换到另外标签暂停播放), 1:禁止所有暂停播放,切换到同一组标签不暂停播放
-        // 自动静音播放 (保持 true)
+        autoPauseDisable: 1, // 0:默认模式, 1:禁止所有暂停播放
+        // 自动静音播放 (保持 true 以确保起播)
         autoMutePlay: true
     };
 
     (() => {
-        // 【沉浸式状态栏/网页主题色】设置主题色
+        // 【沉浸式状态栏/网页主题色】
         var meta = document.createElement('meta')
         meta.name = 'theme-color'
         meta.content = '#090811'
         document.querySelector('head').appendChild(meta)
-        // 【横屏左右沉浸式背景色/视口覆盖非安全区】解决iPhone横屏时背景色未覆盖非安全区（即iPhone刘海区域）的部分
+        // 【横屏左右沉浸式背景色】
         if (videoSettings.viewportFitCover) {
             var viewport = document.querySelector('head > meta[name=viewport]')
             viewport.content = 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover'
@@ -157,33 +75,17 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
         video.id = 'video'
         video.classList.value = 'relative -mx-4 sm:m-0 mt-1'
         
-        // 鼠标样式为手型
+        // 设置鼠标手势为点击状，提示可点击
         video.style.cursor = 'pointer';
 
         // 【视频区域】设备横屏时自动锚点到视频
         window.addEventListener('orientationchange', () => { setTimeout(() => document.querySelector('#video').scrollIntoView(), 400) })
-        // 【视频控制条】获取元素
-        var bar = video.nextElementSibling
         
-        // 一键回到播放器
-        if (videoSettings.playCtrlEnable) {
-            var div = document.createElement('div')
-            div.innerHTML = '<button id="btnControl" onclick="video.scrollIntoView();" type="button" class="relative inline-flex items-center rounded-md bg-transparent pl-2 pr-2 py-2 font-medium text-white hover:bg-primary focus:z-10" style="position: fixed; top: 50%; right: 10px; transform: translateY(-50%); z-index: 1000; opacity: 1; background-color: transparent; border: 1px solid white; border-radius: 8px;border: none;width: 40px; height: 40px;">🔁</button>'
-            document.body.appendChild(div)
-        }
-        
-        // 【视频控制条】显示
-        bar.classList.remove('sm:hidden')
-        // 【视频控制条】样式调整
-        bar.classList.value = 'flex -mx-4 sm:m-0 mt-1 bg-black justify-center'
-        
-        // 【视频控制条】加入播放/暂停按钮 (这是唯一保留的UI按钮，放在控制栏内部)
-        var span = document.createElement('span')
+        // 获取播放器实例
         var player = document.querySelector('video.player')
-        span.classList.value = 'isolate inline-flex rounded-md shadow-sm'
-        span.style = `margin: 0 ${videoSettings.buttonMargin}`
-        span.innerHTML = '<button id="btnPlay" onclick="player.togglePlay();" type="button" class="relative -ml-px inline-flex items-center rounded-md bg-transparent pl-2 pr-2 py-2 font-medium text-white ring-1 ring-inset ring-white hover:bg-primary focus:z-10">' + videoSettings.htmlPlay + '</button>'
-        bar.insertBefore(span, bar.lastElementChild)
+
+        // ⚠️⚠️⚠️ 关键修改：彻底删除了 bar.classList.remove('sm:hidden') 和所有按钮生成代码 ⚠️⚠️⚠️
+        // 这意味着脚本不会在页面上显示任何东西
 
         // ==========================================
         // 【1. 全平台无死角解除静音】
@@ -252,9 +154,6 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
 
         // ==========================================
 
-        // 【视频控制条】播放/暂停时，变化播放按钮形态
-        player.onplay = () => { document.querySelector('#btnPlay').innerHTML = videoSettings.htmlPause }
-
         //FIXME -  禁止播放规则1,就这样写了,有空改改.
         let windowIsBlurred
         window.onblur = () => { windowIsBlurred = true }
@@ -262,21 +161,9 @@ if (/^https:\/\/(missav|thisav)\.com/.test(url)) {
         player.onpause = () => {
             if (windowIsBlurred && videoSettings.autoPauseDisable === 1) {
                 player.play()
-            } else { document.querySelector('#btnPlay').innerHTML = videoSettings.htmlPlay }
+            }
         }
 
-        // 仅在配置开启时，才添加快进快退按钮 (当前已关闭)
-        if (videoSettings.durationBtnEnable) {
-            var leftBtn = bar.querySelector('span:first-child > button:first-child')
-            var rightBtn = bar.querySelector('span:last-child > button:last-child')
-            leftBtn.removeAttribute('@click.prevent')
-            leftBtn.onclick = () => { player.currentTime -= videoSettings.maxDuration }
-            leftBtn.innerHTML = leftBtn.innerHTML.replace('10m', `${minute}m`)
-            rightBtn.removeAttribute('@click.prevent')
-            rightBtn.onclick = () => { player.currentTime += videoSettings.maxDuration }
-            rightBtn.innerHTML = rightBtn.innerHTML.replace('10m', `${minute}m`)
-        }
-        
         const links = document.querySelectorAll('.space-y-2 > div:nth-child(4) a')
 
         links.forEach(link => {
